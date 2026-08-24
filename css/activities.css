@@ -444,3 +444,75 @@ body.dark-mode .activities-backend-warning {
     flex-direction: column;
   }
 }
+/* ===== Boutons modernes activités ===== */
+
+.activity-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.activity-admin-actions .small-btn {
+  min-height: 38px;
+  padding: 8px 13px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+/* Modifier */
+.activity-admin-actions [data-edit-activity] {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.activity-admin-actions [data-edit-activity]::before {
+  content: "✏️";
+}
+
+.activity-admin-actions [data-edit-activity]:hover {
+  background: #dbeafe;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 15px rgba(37, 99, 235, 0.14);
+}
+
+/* Supprimer */
+.activity-admin-actions [data-delete-activity] {
+  background: #fff1f2;
+  color: #be123c;
+  border: 1px solid #fecdd3;
+}
+
+.activity-admin-actions [data-delete-activity]::before {
+  content: "🗑️";
+}
+
+.activity-admin-actions [data-delete-activity]:hover {
+  background: #ffe4e6;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 15px rgba(190, 18, 60, 0.13);
+}
+
+.activity-admin-actions .small-btn:active {
+  transform: scale(0.97);
+}
+
+/* Mode sombre */
+body.dark-mode .activity-admin-actions [data-edit-activity] {
+  background: #172554;
+  color: #bfdbfe;
+  border-color: #1d4ed8;
+}
+
+body.dark-mode .activity-admin-actions [data-delete-activity] {
+  background: #4c0519;
+  color: #fecdd3;
+  border-color: #9f1239;
+}
