@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Planning Outlook & FAQ Numérique</title>
+  <link rel="stylesheet" href="css/style.css?v=20260430" />
+</head>
+<body>
+  <main id="login-screen" class="login-screen">
+    <section class="login-card">
+      <div class="brand-badge">FAQ</div>
+      <h1>Connexion</h1>
+      <p class="muted">Connecte-toi pour accéder au planning Outlook et aux créneaux FAQ numérique.</p>
+      <form id="login-form" class="form-grid">
+        <label>Identifiant
+          <input id="username" type="text" autocomplete="username" placeholder="ex : admin" required />
+        </label>
+        <label>Mot de passe
+          <input id="password" type="password" autocomplete="current-password" placeholder="Mot de passe" required />
+        </label>
+        <button type="submit" class="primary-btn">Se connecter</button>
+        <p id="login-error" class="error-text" hidden>Identifiant ou mot de passe incorrect.</p>
+      </form>
+    </section>
+  </main>
+
+  <main id="app-screen" class="app-screen" hidden>
+    <header class="topbar">
+      <div>
+        <h2>Planning Outlook & FAQ Numérique</h2>
+        <p id="user-label" class="muted"></p>
+      </div>
+      <button id="logout-btn" class="ghost-btn">Déconnexion</button>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="outlook">Planning Outlook</button>
+      <button class="tab-btn admin-only" data-tab="slots">Créneaux FAQ autorisés</button>
+      <button class="tab-btn" data-tab="faq">Remplissage FAQ numérique</button>
+      <button class="tab-btn admin-only" data-tab="structures">Structures & couleurs</button>
+    </nav>
+
+    <section id="outlook" class="tab-panel active">
+      <div class="panel-heading">
+        <div>
+          <h3>Mon planning Outlook</h3>
+          <p class="muted">Cette zone affiche ton calendrier Outlook publié. Mets le lien dans <strong>data/config.js</strong>.</p>
+        </div>
+        <button id="open-outlook-link" class="ghost-btn">Ouvrir Outlook</button>
+      </div>
+      <div id="outlook-empty" class="info-note">
+        Aucun lien Outlook n'est configuré. Ajoute ton lien dans <strong>data/config.js</strong> à la ligne <strong>outlookCalendarUrl</strong>.
+      </div>
+      <div id="outlook-frame-wrapper" class="outlook-frame-wrapper" hidden>
+        <iframe id="outlook-frame" title="Planning Outlook"></iframe>
+      </div>
+    </section>
+
+    <section id="slots" class="tab-panel">
+      <div class="panel-heading">
+        <div>
+          <h3>Créneaux FAQ autorisés</h3>
+          <p class="muted">Seul l'admin crée les plages FAQ. Les collègues ne peuvent inscrire des RDV que dans ces créneaux.</p>
+        </div>
+      </div>
+      <form id="slot-form" class="activity-form admin-only">
+        <input id="slot-edit-id" type="hidden" />
+        <label>Date <input id="slot-date" type="date" required /></label>
+        <label>Début <input id="slot-start" type="time" value="09:00" required /></label>
+        <label>Fin <input id="slot-end" type="time" value="10:00" required /></label>
+        <label>Structure <select id="slot-place" required></select></label>
+        <label>Titre <input id="slot-title" type="text" value="FAQ Numérique" required /></label>
+        <button type="submit" class="primary-btn">Enregistrer le créneau FAQ</button>
+        <button id="slot-cancel-edit" type="button" class="ghost-btn" hidden>Annuler</button>
+      </form>
+      <div id="slot-list" class="slot-list"></div>
+    </section>
+
+    <section id="faq" class="tab-panel">
+      <div class="panel-heading">
+        <div>
+          <h3>Remplissage des créneaux FAQ numérique</h3>
+          <p class="muted">Les inscriptions sont possibles uniquement dans les créneaux FAQ numérique créés par l'admin.</p>
+        </div>
+      </div>
+      <div id="available-slots" class="available-slots"></div>
+      <form id="faq-form" class="activity-form">
+        <input id="faq-edit-id" type="hidden" />
+        <label>Créneau FAQ autorisé <select id="faq-slot" required></select></label>
+        <label>Date précise <input id="faq-date" type="date" required /></label>
+        <label>Heure début <input id="faq-start" type="time" required /></label>
+        <label>Heure fin <input id="faq-end" type="time" required /></label>
+        <label>Structure <select id="faq-place" required></select></label>
+        <label>Nom / prénom <input id="faq-person" type="text" placeholder="Ex : Mme Dupont" required /></label>
+        <label>Demande <input id="faq-need" type="text" placeholder="Ex : CAF, mail, impression..." required /></label>
+        <button type="submit" class="primary-btn">Ajouter le rendez-vous</button>
+        <button id="faq-cancel-edit" type="button" class="ghost-btn" hidden>Annuler</button>
+        <p id="faq-form-error" class="error-text form-message" hidden></p>
+      </form>
+      <div class="toolbar">
+        <button id="export-faq" class="ghost-btn">Exporter FAQ en CSV</button>
+        <button id="clear-demo" class="danger-btn">Vider mes données locales</button>
+      </div>
+      <div id="faq-list" class="faq-list"></div>
+    </section>
+
+    <section id="structures" class="tab-panel">
+      <div class="panel-heading">
+        <div>
+          <h3>Structures & couleurs</h3>
+          <p class="muted">Visible uniquement par l'admin. Chaque structure possède une couleur.</p>
+        </div>
+      </div>
+      <form id="structure-form" class="structure-form">
+        <label>Nom de la structure <input id="structure-name" type="text" placeholder="Ex : Centre social Saint-Martin" required /></label>
+        <label>Couleur <input id="structure-color" type="color" value="#2563eb" required /></label>
+        <button type="submit" class="primary-btn">Ajouter la structure</button>
+      </form>
+      <div id="structure-list" class="structure-list"></div>
+    </section>
+  </main>
+
+  <script src="data/users.js?v=20260603"></script>
+  <script src="data/config.js?v=20260603"></script>
+  <script src="js/app.js?v=20260603"></script>
+</body>
+</html>
