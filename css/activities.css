@@ -516,3 +516,23 @@ body.dark-mode .activity-admin-actions [data-delete-activity] {
   color: #fecdd3;
   border-color: #9f1239;
 }
+
+.activity-admin-row[draggable="true"] {
+  cursor: grab;
+}
+
+.activity-admin-row[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.activity-admin-row.dragging {
+  opacity: 0.5;
+}
+
+.activity-drag-handle {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 20px;
+  cursor: grab;
+  user-select: none;
+}
