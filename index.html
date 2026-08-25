@@ -196,9 +196,15 @@
           <select id="activity-structure" required></select>
         </label>
 
-        <label>Date de début
-          <input id="activity-date" type="date" required />
-        </label>
+        <label class="activities-form-full">
+  <input id="activity-pinned" type="checkbox" />
+  📌 Épingler ce flyer en tête
+  <small class="muted">La date devient facultative pour un flyer épinglé.</small>
+</label>
+
+<label>Date de début
+  <input id="activity-date" type="date" />
+</label>
 
         <label>Date de fin <span class="muted">(facultatif)</span>
           <input id="activity-end-date" type="date" />
