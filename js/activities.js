@@ -272,6 +272,13 @@
   future: [],
   past: []
 };
+  visibleActivities().forEach(item => {
+  const status = statusOf(item);
+
+  if (grouped[status]) {
+    grouped[status].push(item);
+  }
+});
 
     const sections = [
   ["pinned", "📌 À la une"],
@@ -302,41 +309,171 @@
   }
 
   function renderAdmin() {
-    const list = $("#activity-admin-list");
-    if (!list) return;
+  const list = $("#activity-admin-list");
+  if (!list) return;
 
-    populateStructureSelectors();
-    updateBackendWarning();
+  populateStructureSelectors();
+  updateBackendWarning();
 
-    const sorted = sortActivities(activities);
-    if (!sorted.length) {
-      list.innerHTML = `<div class="activities-empty">Aucune activité enregistrée.</div>`;
-      return;
-    }
+  const sorted = sortActivities(activities);
 
-    list.innerHTML = sorted.map(item => {
-      const structure = getStructure(item.structureId);
-      return `
-        <article class="activity-admin-row" style="--activity-color:${escapeHtml(structure.color)}">
-          <div class="activity-admin-info">
-            <strong>${escapeHtml(item.title)}</strong>
-            <div class="activity-admin-meta">${escapeHtml(structure.name)} · ${escapeHtml(dateLabel(item))}</div>
-          </div>
-          <div class="activity-admin-actions">
-            <button type="button" class="small-btn" data-edit-activity="${escapeHtml(item.id)}">Modifier</button>
-            <button type="button" class="small-btn danger" data-delete-activity="${escapeHtml(item.id)}">Supprimer</button>
-          </div>
-        </article>
-      `;
-    }).join("");
-
-    list.querySelectorAll("[data-edit-activity]").forEach(button => {
-      button.addEventListener("click", () => editActivity(button.dataset.editActivity));
-    });
-    list.querySelectorAll("[data-delete-activity]").forEach(button => {
-      button.addEventListener("click", () => deleteActivity(button.dataset.deleteActivity));
-    });
+  if (!sorted.length) {
+    list.innerHTML = `<div class="activities-empty">Aucune activité enregistrée.</div>`;
+    return;
   }
+
+  list.innerHTML = sorted.map(item => {
+    const structure = getStructure(item.structureId);
+
+    const infoDate = item.pinned
+      ? (item.date ? `📌 Épinglé · ${dateLabel(item)}` : "📌 Épinglé")
+      : dateLabel(item);
+
+    return `
+      <article
+        class="activity-admin-row ${item.pinned ? "activity-admin-pinned" : ""}"
+        style="--activity-color:${escapeHtml(structure.color)}"
+        data-admin-activity="${escapeHtml(item.id)}"
+        data-pinned="${item.pinned ? "true" : "false"}"
+        draggable="${item.pinned ? "true" : "false"}"
+      >
+        <div class="activity-admin-info">
+
+          ${item.pinned
+            ? `<span class="activity-drag-handle" title="Glisser pour déplacer">☰</span>`
+            : ""
+          }
+
+          <strong>${escapeHtml(item.title)}</strong>
+
+          <div class="activity-admin-meta">
+            ${escapeHtml(structure.name)} · ${escapeHtml(infoDate)}
+          </div>
+        </div>
+
+        <div class="activity-admin-actions">
+          <button
+            type="button"
+            class="small-btn"
+            data-edit-activity="${escapeHtml(item.id)}"
+          >
+            Modifier
+          </button>
+
+          <button
+            type="button"
+            class="small-btn danger"
+            data-delete-activity="${escapeHtml(item.id)}"
+          >
+            Supprimer
+          </button>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  list.querySelectorAll("[data-edit-activity]").forEach(button => {
+    button.addEventListener("click", () => {
+      editActivity(button.dataset.editActivity);
+    });
+  });
+
+  list.querySelectorAll("[data-delete-activity]").forEach(button => {
+    button.addEventListener("click", () => {
+      deleteActivity(button.dataset.deleteActivity);
+    });
+  });
+
+  let draggedRow = null;
+
+  list
+    .querySelectorAll('.activity-admin-row[data-pinned="true"]')
+    .forEach(row => {
+
+      row.addEventListener("dragstart", event => {
+        draggedRow = row;
+        row.classList.add("dragging");
+
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = "move";
+        }
+      });
+
+      row.addEventListener("dragover", event => {
+        event.preventDefault();
+
+        if (!draggedRow || draggedRow === row) return;
+
+        const rect = row.getBoundingClientRect();
+        const after = event.clientY > rect.top + rect.height / 2;
+
+        if (after) {
+          row.after(draggedRow);
+        } else {
+          row.before(draggedRow);
+        }
+      });
+
+      row.addEventListener("drop", async event => {
+        event.preventDefault();
+        await savePinnedOrderFromDom();
+      });
+
+      row.addEventListener("dragend", () => {
+        row.classList.remove("dragging");
+        draggedRow = null;
+      });
+    });
+}
+
+  async function savePinnedOrderFromDom() {
+  const list = $("#activity-admin-list");
+  if (!list) return;
+
+  const pinnedRows = [
+    ...list.querySelectorAll(
+      '.activity-admin-row[data-pinned="true"]'
+    )
+  ];
+
+  const orders = pinnedRows.map((row, index) => ({
+    id: row.dataset.adminActivity,
+    order: index
+  }));
+
+  activities = activities.map(item => {
+    const position = orders.find(entry => entry.id === item.id);
+
+    if (!position) return item;
+
+    return {
+      ...item,
+      order: position.order
+    };
+  });
+
+  saveLocal();
+  renderPublic();
+
+  if (hasRemoteBackend()) {
+    setFormMessage("Enregistrement de l'ordre…");
+
+    await postRemote("activity_reorder", {
+      orders: orders
+    });
+
+    await delay(700);
+    await loadRemote();
+
+    setFormMessage(
+      "Ordre des flyers enregistré.",
+      "success"
+    );
+  }
+
+  renderAdmin();
+  renderPublic();
+}
 
   function updateBackendWarning() {
     const warning = $("#activities-backend-warning");
