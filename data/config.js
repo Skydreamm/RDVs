@@ -7,7 +7,7 @@ window.APP_CONFIG = {
 
   // Service séparé pour les flyers publics.
   // Déploie google-apps-script-activities.gs en Application Web puis colle ici l'URL qui finit par /exec.
-  activitiesScriptUrl: "https://script.google.com/macros/s/AKfycbxT1U0BkEwIgRsOzT7t5jBXoBWRn-8diWkbMOwrPv_s37NC9-ZN9mPgmdKUf46nNDNa/exec?authuser=0",
+  activitiesScriptUrl: "https://script.google.com/macros/s/AKfycbyndersVScd5GcWTPS5moGPb9eOjI2OAktmhG-gRArbCdI0baZaZkPu5muAT05h7OAQ/exec",
 
   refreshSeconds: 1
 };
