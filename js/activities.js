@@ -199,20 +199,26 @@
   }
 
   function flyerMediaHtml(item) {
-    const type = String(item.fileType || "");
-    const source = String(item.fileType || "").startsWith("image/")
-  ? getFlyerImageUrl(item)
-  : safeUrl(item.fileUrl || item.fileData || "");
-    if (source && type.startsWith("image/")) {
-      return `<img class="activity-flyer-media" src="${escapeHtml(source)}" alt="Flyer : ${escapeHtml(item.title)}" loading="lazy" />`;
-    }
+  const type = String(item.fileType || "");
+  const source = safeUrl(item.fileData || item.fileUrl || "");
 
-    if (source && type === "application/pdf") {
-      return `<div class="activity-flyer-placeholder" aria-label="Flyer PDF">📄</div>`;
-    }
-
-    return `<div class="activity-flyer-placeholder" aria-label="Flyer">📢</div>`;
+  if (source && type.startsWith("image/")) {
+    return `
+      <img
+        class="activity-flyer-media"
+        src="${escapeHtml(source)}"
+        alt="Flyer : ${escapeHtml(item.title)}"
+        loading="lazy"
+      />
+    `;
   }
+
+  if (source && type === "application/pdf") {
+    return `<div class="activity-flyer-placeholder">📄</div>`;
+  }
+
+  return `<div class="activity-flyer-placeholder">📢</div>`;
+}
 
   function activityCardHtml(item) {
     const structure = getStructure(item.structureId);
@@ -530,7 +536,7 @@
 
     const isImage = String(item.fileType || "").startsWith("image/");
     const isPdf = String(item.fileType || "") === "application/pdf";
-    const imageUrl = isImage ? getFlyerImageUrl(item) : "";
+    const imageUrl = safeUrl(item.fileData || item.fileUrl || "");
     const previewUrl = safeUrl(item.filePreviewUrl || item.fileUrl || "");
     const viewUrl = safeUrl(item.fileViewUrl || item.fileUrl || "");
 
