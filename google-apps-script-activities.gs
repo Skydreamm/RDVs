@@ -35,13 +35,40 @@ function doGet(e) {
   const callback = e && e.parameter ? String(e.parameter.callback || "") : "";
 
   if (action === "loadActivities") {
-    const result = { ok: true, activities: loadActivities_() };
-    return outputJsonOrJsonp_(result, callback);
-  }
+  const activities = loadActivities_().map(addInlineFlyer_);
+  const result = { ok: true, activities: activities };
+  return outputJsonOrJsonp_(result, callback);
+}
 
   return ContentService
     .createTextOutput("Service RDVs - Activites de la semaine actif.")
     .setMimeType(ContentService.MimeType.TEXT);
+}
+
+function addInlineFlyer_(item) {
+  const result = Object.assign({}, item);
+
+  if (
+    result.fileId &&
+    String(result.fileType || "").startsWith("image/")
+  ) {
+    try {
+      const file = DriveApp.getFileById(result.fileId);
+      const blob = file.getBlob();
+      const bytes = blob.getBytes();
+
+      result.fileData =
+        "data:" +
+        blob.getContentType() +
+        ";base64," +
+        Utilities.base64Encode(bytes);
+
+    } catch (error) {
+      result.fileData = "";
+    }
+  }
+
+  return result;
 }
 
 function doPost(e) {
