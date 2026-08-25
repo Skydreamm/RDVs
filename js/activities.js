@@ -57,6 +57,18 @@
     return /^(https:\/\/|data:image\/)/i.test(url) ? url : "";
   }
 
+  function getFlyerImageUrl(item) {
+  const fileId = String(item?.fileId || "").trim();
+
+  if (fileId) {
+    return "https://drive.google.com/thumbnail?id="
+      + encodeURIComponent(fileId)
+      + "&sz=w1600";
+  }
+
+  return safeUrl(item?.fileUrl || item?.fileData || "");
+}
+
   function apiUrl() {
     const value = String(window.APP_CONFIG?.activitiesScriptUrl || "").trim();
     return value && !value.includes("COLLE_ICI") ? value : "";
@@ -188,8 +200,9 @@
 
   function flyerMediaHtml(item) {
     const type = String(item.fileType || "");
-    const source = safeUrl(item.fileUrl || item.fileData || "");
-
+    const source = String(item.fileType || "").startsWith("image/")
+  ? getFlyerImageUrl(item)
+  : safeUrl(item.fileUrl || item.fileData || "");
     if (source && type.startsWith("image/")) {
       return `<img class="activity-flyer-media" src="${escapeHtml(source)}" alt="Flyer : ${escapeHtml(item.title)}" loading="lazy" />`;
     }
@@ -517,7 +530,7 @@
 
     const isImage = String(item.fileType || "").startsWith("image/");
     const isPdf = String(item.fileType || "") === "application/pdf";
-    const imageUrl = safeUrl(item.fileUrl || item.fileData || "");
+    const imageUrl = isImage ? getFlyerImageUrl(item) : "";
     const previewUrl = safeUrl(item.filePreviewUrl || item.fileUrl || "");
     const viewUrl = safeUrl(item.fileViewUrl || item.fileUrl || "");
 
