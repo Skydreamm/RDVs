@@ -154,34 +154,47 @@
   }
 
   function statusOf(item) {
-    const today = todayValue();
-    const start = item.date || "";
-    const end = item.endDate || start;
-    if (start && start <= today && today <= end) return "today";
-    if (start > today) return "future";
-    return "past";
-  }
+  if (item.pinned) return "pinned";
+
+  const today = todayValue();
+  const start = item.date || "";
+  const end = item.endDate || start;
+
+  if (start && start <= today && today <= end) return "today";
+  if (start > today) return "future";
+  return "past";
+}
 
   function sortActivities(items) {
-    const groupOrder = { today: 0, future: 1, past: 2 };
-    return [...items].sort((a, b) => {
-      const statusA = statusOf(a);
-      const statusB = statusOf(b);
-      if (groupOrder[statusA] !== groupOrder[statusB]) {
-        return groupOrder[statusA] - groupOrder[statusB];
-      }
+  const groupOrder = {
+    pinned: 0,
+    today: 1,
+    future: 2,
+    past: 3
+  };
 
-      if (statusA === "past") {
-        const endA = a.endDate || a.date || "";
-        const endB = b.endDate || b.date || "";
-        const byEnd = endB.localeCompare(endA);
-        return byEnd || String(b.date || "").localeCompare(String(a.date || ""));
-      }
+  return [...items].sort((a, b) => {
+    const statusA = statusOf(a);
+    const statusB = statusOf(b);
 
-      const byStart = String(a.date || "").localeCompare(String(b.date || ""));
-      return byStart || String(a.title || "").localeCompare(String(b.title || ""), "fr");
-    });
-  }
+    if (groupOrder[statusA] !== groupOrder[statusB]) {
+      return groupOrder[statusA] - groupOrder[statusB];
+    }
+
+    // Les flyers épinglés suivent l'ordre choisi par glisser-déposer
+    if (statusA === "pinned") {
+      return Number(a.order ?? 9999) - Number(b.order ?? 9999);
+    }
+
+    if (statusA === "past") {
+      const endA = a.endDate || a.date || "";
+      const endB = b.endDate || b.date || "";
+      return endB.localeCompare(endA);
+    }
+
+    return String(a.date || "").localeCompare(String(b.date || ""));
+  });
+}
 
   function visibleActivities() {
     return sortActivities(
@@ -235,8 +248,13 @@
         <div class="activity-flyer-content">
           <span class="activity-site-badge">${escapeHtml(structure.name)}</span>
           <h5>${escapeHtml(item.title)}</h5>
-          <p class="activity-date-line"><strong>${escapeHtml(dateLabel(item))}</strong></p>
-          ${item.description ? `<p class="activity-description-line">${escapeHtml(item.description)}</p>` : ""}
+          ${item.date
+  ? `<p class="activity-date-line"><strong>${escapeHtml(dateLabel(item))}</strong></p>`
+  : item.pinned
+    ? `<p class="activity-date-line"><strong>📌 Épinglé</strong></p>`
+    : ""
+}
+    ${item.description ? `<p class="activity-description-line">${escapeHtml(item.description)}</p>` : ""}
         </div>
       </button>
     `;
@@ -248,14 +266,19 @@
 
     populateStructureSelectors();
 
-    const grouped = { today: [], future: [], past: [] };
-    visibleActivities().forEach(item => grouped[statusOf(item)].push(item));
+    const grouped = {
+  pinned: [],
+  today: [],
+  future: [],
+  past: []
+};
 
     const sections = [
-      ["today", "🔴 Aujourd'hui"],
-      ["future", "🟠 À venir"],
-      ["past", "⚪ Activités passées"]
-    ];
+  ["pinned", "📌 À la une"],
+  ["today", "🔴 Aujourd'hui"],
+  ["future", "🟠 À venir"],
+  ["past", "⚪ Activités passées"]
+];
 
     const html = sections.map(([key, title]) => {
       const items = grouped[key];
@@ -402,13 +425,22 @@
     try {
       const title = $("#activity-title").value.trim();
       const structureId = $("#activity-structure").value;
+      const pinned = $("#activity-pinned").checked;
       const date = $("#activity-date").value;
-      const endDate = $("#activity-end-date").value || date;
+      const endDate = date
+      ? ($("#activity-end-date").value || date)
+        : "";
       const description = $("#activity-description").value.trim();
       const file = await readFile($("#activity-file").files[0]);
       const existing = editingId ? activities.find(item => item.id === editingId) : null;
 
-      if (!title || !structureId || !date) throw new Error("Titre, site et date sont obligatoires.");
+      if (!title || !structureId) {
+  throw new Error("Titre et site sont obligatoires.");
+}
+
+if (!pinned && !date) {
+  throw new Error("La date est obligatoire sauf pour un flyer épinglé.");
+}
       if (endDate < date) throw new Error("La date de fin doit être après la date de début.");
       if (!existing && !file) throw new Error("Choisis un flyer avant de publier.");
 
@@ -421,6 +453,8 @@
         date,
         endDate,
         description,
+        pinned,
+        order: existing?.order ?? activities.filter(a => a.pinned).length,
         updatedAt: now,
         createdAt: existing?.createdAt || now
       };
@@ -505,6 +539,7 @@
     editingId = id;
     $("#activity-title").value = item.title || "";
     $("#activity-structure").value = item.structureId || "";
+    $("#activity-pinned").checked = Boolean(item.pinned);
     $("#activity-date").value = item.date || "";
     $("#activity-end-date").value = item.endDate || item.date || "";
     $("#activity-description").value = item.description || "";
