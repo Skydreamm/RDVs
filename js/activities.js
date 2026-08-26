@@ -699,46 +699,67 @@ if (!pinned && !date) {
   }
 
   function openActivity(id) {
-    const item = activities.find(activity => activity.id === id);
-    if (!item) return;
+  const item = activities.find(activity => activity.id === id);
+  if (!item) return;
 
-    const structure = getStructure(item.structureId);
-    const modal = $("#detail-modal");
-    if (!modal) return;
+  const structure = getStructure(item.structureId);
+  const modal = $("#detail-modal");
+  if (!modal) return;
 
-    const isImage = String(item.fileType || "").startsWith("image/");
-    const isPdf = String(item.fileType || "") === "application/pdf";
-    const imageUrl = safeUrl(item.fileData || item.fileUrl || "");
-    const previewUrl = safeUrl(item.filePreviewUrl || item.fileUrl || "");
+  const isImage = String(item.fileType || "").startsWith("image/");
+  const isPdf = String(item.fileType || "") === "application/pdf";
 
-    let media = `<div class="activities-empty">Aucun flyer disponible.</div>`;
-    if (isImage && imageUrl) {
-      media = `<img class="activity-modal-image" src="${escapeHtml(imageUrl)}" alt="Flyer : ${escapeHtml(item.title)}" />`;
-    } else if (isPdf && previewUrl) {
-      media = `<iframe class="activity-modal-frame" src="${escapeHtml(previewUrl)}" title="Flyer PDF : ${escapeHtml(item.title)}"></iframe>`;
-    }
+  const imageUrl = safeUrl(item.fileData || item.fileUrl || "");
+  const previewUrl = safeUrl(item.filePreviewUrl || item.fileUrl || "");
 
-    $("#detail-modal-title").textContent = item.title;
-    $("#detail-modal-content").innerHTML = `
-  <div class="activity-detail-meta">
-    <div><strong>Site :</strong> ${escapeHtml(structure.name)}</div>
+  let media = `<div class="activities-empty">Aucun flyer disponible.</div>`;
 
-    ${item.date
-      ? `<div><strong>Date :</strong> ${escapeHtml(dateLabel(item))}</div>`
-      : ""
-    }
+  if (isImage && imageUrl) {
+    media = `
+      <img
+        class="activity-modal-image"
+        src="${escapeHtml(imageUrl)}"
+        alt="Flyer : ${escapeHtml(item.title)}"
+      />
+    `;
+  } else if (isPdf && previewUrl) {
+    media = `
+      <iframe
+        class="activity-modal-frame"
+        src="${escapeHtml(previewUrl)}"
+        title="Flyer PDF : ${escapeHtml(item.title)}">
+      </iframe>
+    `;
+  }
 
-    ${item.description
-      ? `<div>${escapeHtml(item.description)}</div>`
-      : ""
-    }
-  </div>
+  $("#detail-modal-title").textContent = item.title;
 
-  ${media}
-`;
+  $("#detail-modal-content").innerHTML = `
+    <div class="activity-detail-meta">
 
-$("#detail-modal-actions").innerHTML = "";
-modal.hidden = false;
+      <div>
+        <strong>Site :</strong>
+        ${escapeHtml(structure.name)}
+      </div>
+
+      ${item.date
+        ? `<div><strong>Date :</strong> ${escapeHtml(dateLabel(item))}</div>`
+        : ""
+      }
+
+      ${item.description
+        ? `<div>${escapeHtml(item.description)}</div>`
+        : ""
+      }
+
+    </div>
+
+    ${media}
+  `;
+
+  $("#detail-modal-actions").innerHTML = "";
+  modal.hidden = false;
+}
 
   function postRemote(action, item) {
     const url = apiUrl();
