@@ -710,7 +710,6 @@ if (!pinned && !date) {
     const isPdf = String(item.fileType || "") === "application/pdf";
     const imageUrl = safeUrl(item.fileData || item.fileUrl || "");
     const previewUrl = safeUrl(item.filePreviewUrl || item.fileUrl || "");
-    const viewUrl = safeUrl(item.fileViewUrl || item.fileUrl || "");
 
     let media = `<div class="activities-empty">Aucun flyer disponible.</div>`;
     if (isImage && imageUrl) {
@@ -721,16 +720,25 @@ if (!pinned && !date) {
 
     $("#detail-modal-title").textContent = item.title;
     $("#detail-modal-content").innerHTML = `
-      <div class="activity-detail-meta">
-        <div><strong>Site :</strong> ${escapeHtml(structure.name)}</div>
-        <div><strong>Date :</strong> ${escapeHtml(dateLabel(item))}</div>
-        ${item.description ? `<div>${escapeHtml(item.description)}</div>` : ""}
-      </div>
-      ${media}
-      ${isImage && imageUrl ? `<a class="ghost-btn activity-open-link" href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener">Ouvrir l'image</a>` : ""}`;
-    $("#detail-modal-actions").innerHTML = "";
-    modal.hidden = false;
-  }
+  <div class="activity-detail-meta">
+    <div><strong>Site :</strong> ${escapeHtml(structure.name)}</div>
+
+    ${item.date
+      ? `<div><strong>Date :</strong> ${escapeHtml(dateLabel(item))}</div>`
+      : ""
+    }
+
+    ${item.description
+      ? `<div>${escapeHtml(item.description)}</div>`
+      : ""
+    }
+  </div>
+
+  ${media}
+`;
+
+$("#detail-modal-actions").innerHTML = "";
+modal.hidden = false;
 
   function postRemote(action, item) {
     const url = apiUrl();
