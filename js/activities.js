@@ -727,8 +727,7 @@ if (!pinned && !date) {
         ${item.description ? `<div>${escapeHtml(item.description)}</div>` : ""}
       </div>
       ${media}
-      ${viewUrl ? `<a class="ghost-btn activity-open-link" href="${escapeHtml(viewUrl)}" target="_blank" rel="noopener">Ouvrir le flyer</a>` : ""}
-    `;
+      ${isImage && imageUrl ? `<a class="ghost-btn activity-open-link" href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener">Ouvrir l'image</a>` : ""}
     $("#detail-modal-actions").innerHTML = "";
     modal.hidden = false;
   }
