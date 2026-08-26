@@ -610,11 +610,16 @@ if (!pinned && !date) {
         // Google Apps Script est appelé en no-cors. On recharge ensuite la liste
         // publique pour confirmer que l'enregistrement est bien partagé.
         let confirmed = false;
-        for (let attempt = 0; attempt < 3 && !confirmed; attempt++) {
-          await delay(900 + attempt * 500);
-          confirmed = await loadRemote();
-          confirmed = confirmed && activities.some(remote => remote.id === item.id);
-        }
+
+for (let attempt = 0; attempt < 6 && !confirmed; attempt++) {
+  await delay(1500);
+
+  const loaded = await loadRemote();
+
+  if (loaded) {
+    confirmed = activities.some(remote => remote.id === item.id);
+  }
+}
 
         if (!confirmed) {
           // On conserve une copie locale pour ne pas perdre le formulaire,
