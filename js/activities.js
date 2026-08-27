@@ -796,7 +796,7 @@ for (let attempt = 0; attempt < 6 && !confirmed; attempt++) {
         resolve(success);
       };
 
-      const timeout = setTimeout(() => finish(false), 8000);
+      const timeout = setTimeout(() => finish(false), 20000);
 
       window[callbackName] = data => {
         if (data && data.ok && Array.isArray(data.activities)) {
