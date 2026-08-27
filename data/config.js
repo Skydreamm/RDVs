@@ -9,5 +9,5 @@ window.APP_CONFIG = {
   // Déploie google-apps-script-activities.gs en Application Web puis colle ici l'URL qui finit par /exec.
   activitiesScriptUrl: "https://script.google.com/macros/s/AKfycbyndersVScd5GcWTPS5moGPb9eOjI2OAktmhG-gRArbCdI0baZaZkPu5muAT05h7OAQ/exec",
 
-  refreshSeconds: 1
+  refreshSeconds: 10
 };
