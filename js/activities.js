@@ -456,70 +456,326 @@
   renderPublic();
 
   if (hasRemoteBackend()) {
-  setFormMessage("Publication du flyer…");
+    setFormMessage("Enregistrement de l'ordre…");
 
-  await postRemote(
-    existing ? "activity_update" : "activity_create",
-    item
-  );
+    await postRemote("activity_reorder", {
+      orders: orders
+    });
 
-  let confirmed = false;
-
-  for (let attempt = 0; attempt < 6 && !confirmed; attempt++) {
-    await delay(1500);
-
-    const loaded = await loadRemote();
-
-    if (loaded) {
-      confirmed = activities.some(
-        remote => remote.id === item.id
-      );
-    }
-  }
-
-  if (!confirmed) {
-    activities = upsertLocalItem(item);
-    saveLocal();
+    await delay(700);
+    await loadRemote();
 
     setFormMessage(
-      "Le flyer a été envoyé, mais la publication partagée n'a pas encore pu être confirmée. Utilise Actualiser dans quelques secondes.",
-      "warning"
-    );
-  } else {
-    setFormMessage(
-      "Activité publiée pour tous les visiteurs.",
+      "Ordre des flyers enregistré.",
       "success"
     );
   }
 
-  // Actualisation automatique
-  setTimeout(() => {
-    refreshFromRemote(false);
-  }, 3000);
-
-  setTimeout(() => {
-    refreshFromRemote(false);
-  }, 8000);
-
-} else {
-  activities = upsertLocalItem(item);
-  saveLocal();
-
-  setFormMessage(
-    "Activité enregistrée seulement sur cet appareil. Configure le service Flyers pour la rendre visible à tous.",
-    "warning"
-  );
+  renderAdmin();
+  renderPublic();
 }
-      resetForm(false);
-      renderAdmin();
-      renderPublic();
-    } catch (error) {
-      setFormMessage(error.message || String(error), "error");
-    } finally {
-      if (submit) submit.disabled = false;
-    }
+
+function updateBackendWarning() {
+  const warning = $("#activities-backend-warning");
+  if (warning) warning.hidden = hasRemoteBackend();
+}
+
+function setPublicStatus(message) {
+  const status = $("#activities-public-status");
+  if (status) status.textContent = message || "";
+}
+
+function setFormMessage(message, type = "") {
+  const el = $("#activity-form-message");
+  if (!el) return;
+
+  el.textContent = message || "";
+  el.className =
+    "activities-form-message activities-form-full" +
+    (type ? ` ${type}` : "");
+}
+
+function showPublicScreen() {
+  const login = $("#login-screen");
+  const app = $("#app-screen");
+  const publicScreen = $("#activities-public");
+
+  if (!publicScreen) return;
+
+  if (login) login.hidden = true;
+  if (app) app.hidden = true;
+
+  publicScreen.hidden = false;
+
+  selectedFilter = "all";
+
+  renderPublic();
+  refreshFromRemote(true);
+}
+
+function leavePublicScreen() {
+  const publicScreen = $("#activities-public");
+
+  if (publicScreen) {
+    publicScreen.hidden = true;
   }
 
+  const login = $("#login-screen");
+
+  if (login) {
+    login.hidden = false;
+  }
+}
+
+function readFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) return resolve(null);
+
+    if (file.size > MAX_FILE_BYTES) {
+      return reject(
+        new Error("Le flyer dépasse 8 Mo.")
+      );
+    }
+
+    const allowed = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "application/pdf"
+    ];
+
+    if (file.type && !allowed.includes(file.type)) {
+      return reject(
+        new Error(
+          "Format non accepté. Utilise JPG, PNG, WebP ou PDF."
+        )
+      );
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () =>
+      resolve({
+        name: file.name,
+        type: file.type || guessMime(file.name),
+        size: file.size,
+        data: reader.result
+      });
+
+    reader.onerror = () =>
+      reject(
+        new Error(
+          "Impossible de lire le fichier choisi."
+        )
+      );
+
+    reader.readAsDataURL(file);
+  });
+}
+
+function guessMime(name) {
+  const lower = String(name || "").toLowerCase();
+
+  if (lower.endsWith(".pdf")) {
+    return "application/pdf";
+  }
+
+  if (lower.endsWith(".png")) {
+    return "image/png";
+  }
+
+  if (lower.endsWith(".webp")) {
+    return "image/webp";
+  }
+
+  return "image/jpeg";
+}
+
+async function saveActivity(event) {
+  event.preventDefault();
+
+  if (!isAdminUser()) {
+    setFormMessage(
+      "Seul l'administrateur peut gérer les activités.",
+      "error"
+    );
+    return;
+  }
+
+  const submit = $("#activity-submit");
+
+  if (submit) {
+    submit.disabled = true;
+  }
+
+  setFormMessage("Préparation du flyer…");
+
+  try {
+    const title =
+      $("#activity-title").value.trim();
+
+    const structureId =
+      $("#activity-structure").value;
+
+    const pinned =
+      $("#activity-pinned").checked;
+
+    const date =
+      $("#activity-date").value;
+
+    const endDate = date
+      ? ($("#activity-end-date").value || date)
+      : "";
+
+    const description =
+      $("#activity-description").value.trim();
+
+    const file = await readFile(
+      $("#activity-file").files[0]
+    );
+
+    const existing = editingId
+      ? activities.find(
+          item => item.id === editingId
+        )
+      : null;
+
+    if (!title || !structureId) {
+      throw new Error(
+        "Titre et site sont obligatoires."
+      );
+    }
+
+    if (!pinned && !date) {
+      throw new Error(
+        "La date est obligatoire sauf pour un flyer épinglé."
+      );
+    }
+
+    if (date && endDate && endDate < date) {
+      throw new Error(
+        "La date de fin doit être après la date de début."
+      );
+    }
+
+    if (!existing && !file) {
+      throw new Error(
+        "Choisis un flyer avant de publier."
+      );
+    }
+
+    const now = new Date().toISOString();
+
+    const item = {
+      ...(existing || {}),
+      id: existing?.id || uid(),
+      title,
+      structureId,
+      date,
+      endDate,
+      description,
+      pinned,
+      order:
+        existing?.order ??
+        activities.filter(a => a.pinned).length,
+      updatedAt: now,
+      createdAt:
+        existing?.createdAt || now
+    };
+
+    if (file) {
+      item.fileName = file.name;
+      item.fileType = file.type;
+      item.fileSize = file.size;
+      item.fileData = file.data;
+    }
+
+    if (hasRemoteBackend()) {
+      setFormMessage(
+        "Publication du flyer…"
+      );
+
+      await postRemote(
+        existing
+          ? "activity_update"
+          : "activity_create",
+        item
+      );
+
+      let confirmed = false;
+
+      for (
+        let attempt = 0;
+        attempt < 6 && !confirmed;
+        attempt++
+      ) {
+        await delay(1500);
+
+        const loaded =
+          await loadRemote();
+
+        if (loaded) {
+          confirmed = activities.some(
+            remote =>
+              remote.id === item.id
+          );
+        }
+      }
+
+      if (!confirmed) {
+        activities =
+          upsertLocalItem(item);
+
+        saveLocal();
+
+        setFormMessage(
+          "Le flyer a été envoyé. Actualisation automatique en cours…",
+          "warning"
+        );
+      } else {
+        setFormMessage(
+          "Activité publiée pour tous les visiteurs.",
+          "success"
+        );
+      }
+
+      // Actualisation automatique
+      setTimeout(() => {
+        refreshFromRemote(false);
+      }, 3000);
+
+      setTimeout(() => {
+        refreshFromRemote(false);
+      }, 8000);
+
+    } else {
+      activities =
+        upsertLocalItem(item);
+
+      saveLocal();
+
+      setFormMessage(
+        "Activité enregistrée seulement sur cet appareil. Configure le service Flyers pour la rendre visible à tous.",
+        "warning"
+      );
+    }
+
+    resetForm(false);
+    renderAdmin();
+    renderPublic();
+
+  } catch (error) {
+    setFormMessage(
+      error.message || String(error),
+      "error"
+    );
+
+  } finally {
+    if (submit) {
+      submit.disabled = false;
+    }
+  }
+}
   function upsertLocalItem(item) {
     const exists = activities.some(existing => existing.id === item.id);
     return exists
