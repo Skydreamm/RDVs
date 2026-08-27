@@ -630,7 +630,18 @@ for (let attempt = 0; attempt < 6 && !confirmed; attempt++) {
         } else {
           setFormMessage("Activité publiée pour tous les visiteurs.", "success");
         }
-      } else {
+      } 
+
+        // Actualisation automatique après la publication
+setTimeout(() => {
+  refreshFromRemote(false);
+}, 3000);
+
+setTimeout(() => {
+  refreshFromRemote(false);
+}, 8000);
+        
+      else {
         activities = upsertLocalItem(item);
         saveLocal();
         setFormMessage("Activité enregistrée seulement sur cet appareil. Configure le service Flyers pour la rendre visible à tous.", "warning");
