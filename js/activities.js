@@ -13,8 +13,11 @@
   ];
 
   let activities = loadLocal();
-  let selectedFilter = "all";
-  let editingId = null;
+let selectedFilter = "all";
+let editingId = null;
+
+const flyerImageCache = new Map();
+const flyerImageRequests = new Map();
 
   const $ = selector => document.querySelector(selector);
 
@@ -213,24 +216,213 @@
 
   function flyerMediaHtml(item) {
   const type = String(item.fileType || "");
-  const source = safeUrl(item.fileData || item.fileUrl || "");
+  const fileId = String(item.fileId || "");
 
-  if (source && type.startsWith("image/")) {
+  if (type.startsWith("image/") && fileId) {
+    const cached =
+      flyerImageCache.get(fileId) ||
+      safeUrl(item.fileData || "");
+
     return `
-      <img
-        class="activity-flyer-media"
-        src="${escapeHtml(source)}"
-        alt="Flyer : ${escapeHtml(item.title)}"
-        loading="lazy"
-      />
+      <div
+        class="activity-flyer-loader"
+        data-flyer-container="${escapeHtml(fileId)}"
+      >
+
+        <div
+          class="activity-flyer-placeholder"
+          data-flyer-placeholder="${escapeHtml(fileId)}"
+          ${cached ? "hidden" : ""}
+        >
+          ⏳
+        </div>
+
+        <img
+          class="activity-flyer-media"
+          data-flyer-file-id="${escapeHtml(fileId)}"
+          ${cached ? `src="${escapeHtml(cached)}"` : ""}
+          alt="Flyer : ${escapeHtml(item.title)}"
+          loading="lazy"
+          ${cached ? "" : "hidden"}
+        />
+
+      </div>
     `;
   }
 
-  if (source && type === "application/pdf") {
-    return `<div class="activity-flyer-placeholder">📄</div>`;
+  if (type === "application/pdf") {
+    return `
+      <div class="activity-flyer-placeholder">
+        📄
+      </div>
+    `;
   }
 
-  return `<div class="activity-flyer-placeholder">📢</div>`;
+  return `
+    <div class="activity-flyer-placeholder">
+      📢
+    </div>
+  `;
+}
+
+  function loadFlyerImage(item) {
+  const fileId = String(item?.fileId || "").trim();
+
+  if (!fileId) {
+    return Promise.resolve("");
+  }
+
+  // Image déjà chargée
+  if (flyerImageCache.has(fileId)) {
+    return Promise.resolve(
+      flyerImageCache.get(fileId)
+    );
+  }
+
+  // Évite plusieurs téléchargements simultanés
+  // de la même image.
+  if (flyerImageRequests.has(fileId)) {
+    return flyerImageRequests.get(fileId);
+  }
+
+  const url = apiUrl();
+
+  if (!url) {
+    return Promise.resolve("");
+  }
+
+  const request = new Promise(resolve => {
+    const callbackName =
+      "rdvsFlyerCallback_" +
+      Date.now() +
+      "_" +
+      Math.floor(Math.random() * 100000);
+
+    const script =
+      document.createElement("script");
+
+    let finished = false;
+
+    const finish = source => {
+      if (finished) return;
+
+      finished = true;
+
+      clearTimeout(timeout);
+
+      try {
+        delete window[callbackName];
+      } catch {}
+
+      if (script.parentNode) {
+        script.remove();
+      }
+
+      resolve(source || "");
+    };
+
+    const timeout = setTimeout(
+      () => finish(""),
+      12000
+    );
+
+    window[callbackName] = data => {
+      if (
+        data &&
+        data.ok &&
+        data.fileData
+      ) {
+        const source =
+          safeUrl(data.fileData);
+
+        if (source) {
+          flyerImageCache.set(
+            fileId,
+            source
+          );
+        }
+
+        finish(source);
+      } else {
+        finish("");
+      }
+    };
+
+    script.onerror = () => finish("");
+
+    const separator =
+      url.includes("?") ? "&" : "?";
+
+    script.src =
+      `${url}${separator}` +
+      `action=loadFlyer` +
+      `&fileId=${encodeURIComponent(fileId)}` +
+      `&callback=${encodeURIComponent(callbackName)}` +
+      `&t=${Date.now()}`;
+
+    document.body.appendChild(script);
+  });
+
+  flyerImageRequests.set(
+    fileId,
+    request
+  );
+
+  request.finally(() => {
+    flyerImageRequests.delete(fileId);
+  });
+
+  return request;
+}
+
+function hydrateFlyerImages(container) {
+  if (!container) return;
+
+  container
+    .querySelectorAll(
+      "[data-flyer-file-id]"
+    )
+    .forEach(async image => {
+      const fileId =
+        image.dataset.flyerFileId;
+
+      if (!fileId) return;
+
+      const item = activities.find(
+        activity =>
+          String(activity.fileId || "") ===
+          fileId
+      );
+
+      if (!item) return;
+
+      const source =
+        await loadFlyerImage(item);
+
+      if (
+        !source ||
+        !image.isConnected
+      ) {
+        return;
+      }
+
+      image.src = source;
+      image.hidden = false;
+
+      const wrapper =
+        image.closest(
+          "[data-flyer-container]"
+        );
+
+      const placeholder =
+        wrapper?.querySelector(
+          "[data-flyer-placeholder]"
+        );
+
+      if (placeholder) {
+        placeholder.hidden = true;
+      }
+    });
 }
 
   function activityCardHtml(item) {
@@ -302,6 +494,7 @@
     }).join("");
 
     list.innerHTML = html || `<div class="activities-empty">Aucune activité à afficher pour le moment.</div>`;
+    hydrateFlyerImages(list);
 
     list.querySelectorAll("[data-view-activity]").forEach(button => {
       button.addEventListener("click", () => openActivity(button.dataset.viewActivity));
@@ -834,30 +1027,77 @@ async function saveActivity(event) {
   }
 
   function openActivity(id) {
-  const item = activities.find(activity => activity.id === id);
+  const item = activities.find(
+    activity => activity.id === id
+  );
+
   if (!item) return;
 
-  const structure = getStructure(item.structureId);
-  const modal = $("#detail-modal");
+  const structure =
+    getStructure(item.structureId);
+
+  const modal =
+    $("#detail-modal");
+
   if (!modal) return;
 
-  const isImage = String(item.fileType || "").startsWith("image/");
-  const isPdf = String(item.fileType || "") === "application/pdf";
+  const isImage =
+    String(item.fileType || "")
+      .startsWith("image/");
 
-  const imageUrl = safeUrl(item.fileData || item.fileUrl || "");
-  const previewUrl = safeUrl(item.filePreviewUrl || item.fileUrl || "");
+  const isPdf =
+    String(item.fileType || "") ===
+    "application/pdf";
 
-  let media = `<div class="activities-empty">Aucun flyer disponible.</div>`;
+  const fileId =
+    String(item.fileId || "");
 
-  if (isImage && imageUrl) {
-    media = `
-      <img
-        class="activity-modal-image"
-        src="${escapeHtml(imageUrl)}"
-        alt="Flyer : ${escapeHtml(item.title)}"
-      />
-    `;
-  } else if (isPdf && previewUrl) {
+  const cachedImage =
+    flyerImageCache.get(fileId) ||
+    safeUrl(item.fileData || "");
+
+  const previewUrl =
+    safeUrl(
+      item.filePreviewUrl ||
+      item.fileUrl ||
+      ""
+    );
+
+  let media = `
+    <div class="activities-empty">
+      Aucun flyer disponible.
+    </div>
+  `;
+
+  if (isImage) {
+    if (cachedImage) {
+      media = `
+        <img
+          class="activity-modal-image"
+          src="${escapeHtml(cachedImage)}"
+          alt="Flyer : ${escapeHtml(item.title)}"
+        />
+      `;
+    } else {
+      media = `
+        <div
+          id="activity-modal-image-loading"
+          class="activities-empty"
+        >
+          Chargement du flyer…
+        </div>
+
+        <img
+          id="activity-modal-image"
+          class="activity-modal-image"
+          alt="Flyer : ${escapeHtml(item.title)}"
+          hidden
+        />
+      `;
+    }
+  }
+
+  else if (isPdf && previewUrl) {
     media = `
       <iframe
         class="activity-modal-frame"
@@ -867,7 +1107,8 @@ async function saveActivity(event) {
     `;
   }
 
-  $("#detail-modal-title").textContent = item.title;
+  $("#detail-modal-title").textContent =
+    item.title;
 
   $("#detail-modal-content").innerHTML = `
     <div class="activity-detail-meta">
@@ -877,14 +1118,21 @@ async function saveActivity(event) {
         ${escapeHtml(structure.name)}
       </div>
 
-      ${item.date
-        ? `<div><strong>Date :</strong> ${escapeHtml(dateLabel(item))}</div>`
-        : ""
+      ${
+        item.date
+          ? `<div>
+              <strong>Date :</strong>
+              ${escapeHtml(dateLabel(item))}
+            </div>`
+          : ""
       }
 
-      ${item.description
-        ? `<div>${escapeHtml(item.description)}</div>`
-        : ""
+      ${
+        item.description
+          ? `<div>
+              ${escapeHtml(item.description)}
+            </div>`
+          : ""
       }
 
     </div>
@@ -893,7 +1141,31 @@ async function saveActivity(event) {
   `;
 
   $("#detail-modal-actions").innerHTML = "";
+
   modal.hidden = false;
+
+  // Si l'image n'était pas encore chargée,
+  // on la récupère maintenant.
+  if (isImage && !cachedImage) {
+    loadFlyerImage(item).then(source => {
+      if (!source) return;
+
+      const image =
+        $("#activity-modal-image");
+
+      const loading =
+        $("#activity-modal-image-loading");
+
+      if (image) {
+        image.src = source;
+        image.hidden = false;
+      }
+
+      if (loading) {
+        loading.hidden = true;
+      }
+    });
+  }
 }
 
   function postRemote(action, item) {
@@ -926,7 +1198,7 @@ async function saveActivity(event) {
         resolve(success);
       };
 
-      const timeout = setTimeout(() => finish(false), 20000);
+      const timeout = setTimeout(() => finish(false), 8000);
 
       window[callbackName] = data => {
         if (data && data.ok && Array.isArray(data.activities)) {
