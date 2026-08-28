@@ -230,12 +230,11 @@ const flyerImageRequests = new Map();
       >
 
         <div
-          class="activity-flyer-placeholder"
-          data-flyer-placeholder="${escapeHtml(fileId)}"
-          ${cached ? "hidden" : ""}
-        >
-          ⏳
-        </div>
+  class="activity-flyer-placeholder"
+  data-flyer-placeholder="${escapeHtml(fileId)}"
+  ${cached ? "hidden" : ""}
+>
+</div>
 
         <img
           class="activity-flyer-media"
