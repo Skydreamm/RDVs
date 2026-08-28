@@ -182,6 +182,12 @@
   font-size: 58px;
 }
 
+/* Cache réellement le sablier une fois le flyer chargé */
+.activity-flyer-placeholder[hidden],
+.activity-flyer-media[hidden] {
+  display: none !important;
+}
+
 .activity-flyer-content {
   padding: 14px 14px 16px;
 }
