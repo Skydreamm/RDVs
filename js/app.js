@@ -87,11 +87,6 @@ async function postToAppsScript(payload) {
     return;
   }
 
-  /*
-    Important :
-    - payload garde type + item pour la synchronisation
-    - payload.mail est recopié à la racine pour le mail / Power Automate / calendrier Microsoft
-  */
   const bodyToSend = payload.mail
     ? {
         ...payload,
@@ -204,6 +199,14 @@ function addDays(date, days) {
   return d;
 }
 
+function getISOWeekNumber(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
 function formatDateFr(date) {
   return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit" }).format(date);
 }
@@ -282,12 +285,14 @@ function init() {
 
   applySavedTheme();
   $("#theme-toggle").addEventListener("click", toggleTheme);
-  
+
   $("#login-form").addEventListener("submit", onLogin);
   $("#logout-btn").addEventListener("click", logout);
   $("#refresh-btn").addEventListener("click", refreshNow);
   $("#planning-form").addEventListener("submit", addPlanningItem);
   $("#planning-type").addEventListener("change", syncPlanningTitleWithType);
+  $("#planning-recurrence")?.addEventListener("change", toggleRecurrenceCountField);
+  $("#duplicate-week-btn")?.addEventListener("click", duplicateDisplayedWeek);
   $("#faq-form").addEventListener("submit", addFaqItem);
   $("#faq-slot").addEventListener("change", applySelectedSlotToFaqForm);
   $("#faq-date").addEventListener("change", validateFaqFormLive);
@@ -419,12 +424,29 @@ function changeWeek(days) {
 }
 
 function updateWeekLabel() {
-  $("#week-label").textContent = `Semaine du ${formatDateLongFr(currentWeekStart)} au ${formatDateLongFr(addDays(currentWeekStart, 6))}`;
+  const weekNum = getISOWeekNumber(currentWeekStart);
+  $("#week-label").innerHTML = `
+    <span class="week-num-pill">Semaine n° ${weekNum}</span>
+    Semaine du ${formatDateLongFr(currentWeekStart)} au ${formatDateLongFr(addDays(currentWeekStart, 6))}
+  `;
 }
 
 function syncPlanningTitleWithType() {
   if ($("#planning-type").value === "faq") {
     $("#planning-title").value = "FAQ Numérique";
+  }
+}
+
+function toggleRecurrenceCountField() {
+  const isRecurring = $("#planning-recurrence")?.value === "yes";
+  const wrap = $("#planning-recurrence-count-wrap");
+  if (wrap) wrap.hidden = !isRecurring;
+}
+
+async function syncMultipleItems(payloads) {
+  for (const payload of payloads) {
+    await postToAppsScript(payload);
+    await new Promise(r => setTimeout(r, 180));
   }
 }
 
@@ -440,37 +462,63 @@ function addPlanningItem(event) {
   const structureId = $("#planning-place").value;
   const structure = findStructure(structureId);
 
+  const isRecurring = $("#planning-recurrence")?.value === "yes";
+  const weeksCount = isRecurring
+    ? Math.min(52, Math.max(2, parseInt($("#planning-recurrence-count")?.value, 10) || 2))
+    : 1;
+
   if (!dateValue) return alert("Choisis une date.");
   if (minutes(end) <= minutes(start)) return alert("L'heure de fin doit être après l'heure de début.");
 
-  const newItem = {
-    id: uid(),
-    ownerId: currentUser.id,
-    ownerName: currentUser.name,
-    date: dateValue,
-    day: dayFromDate(dateValue),
-    start,
-    end,
-    type,
-    title,
-    structureId,
-    place: structure.name,
-    color: structure.color,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
+  const recurrenceId = isRecurring ? "rec_" + Date.now() + "_" + Math.random().toString(16).slice(2, 6) : "";
+  const createdItems = [];
+  const baseDate = new Date(`${dateValue}T12:00:00`);
 
-  planningItems.push(newItem);
-  currentWeekStart = getMonday(new Date(`${dateValue}T12:00:00`));
+  for (let i = 0; i < weeksCount; i++) {
+    const targetDate = addDays(baseDate, i * 7);
+    const targetDateStr = toDateInputValue(targetDate);
+
+    const newItem = {
+      id: uid(),
+      ownerId: currentUser.id,
+      ownerName: currentUser.name,
+      date: targetDateStr,
+      day: dayFromDate(targetDateStr),
+      start,
+      end,
+      type,
+      title,
+      structureId,
+      place: structure.name,
+      color: structure.color,
+      recurrenceId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    planningItems.push(newItem);
+    createdItems.push(newItem);
+  }
+
+  currentWeekStart = getMonday(baseDate);
   saveLocal();
   renderAll();
 
-  syncSharedDataDebounced({
-    type: "upsert-planning",
-    item: newItem,
-    notify: window.APP_CONFIG?.enableMailNotification === true,
-    mail: buildPlanningMail("Créneau planning ajouté", newItem)
-  });
+  if (createdItems.length === 1) {
+    syncSharedDataDebounced({
+      type: "upsert-planning",
+      item: createdItems[0],
+      notify: window.APP_CONFIG?.enableMailNotification === true,
+      mail: buildPlanningMail("Créneau planning ajouté", createdItems[0])
+    });
+  } else {
+    syncMultipleItems(createdItems.map((item, idx) => ({
+      type: "upsert-planning",
+      item,
+      notify: idx === 0 && window.APP_CONFIG?.enableMailNotification === true,
+      mail: buildPlanningMail(`Série de ${createdItems.length} créneaux ajoutée`, item)
+    })));
+  }
 
   event.target.reset();
   $("#planning-date").value = dateValue;
@@ -478,7 +526,56 @@ function addPlanningItem(event) {
   $("#planning-end").value = "10:00";
   $("#planning-type").value = "faq";
   $("#planning-title").value = "FAQ Numérique";
+  if ($("#planning-recurrence")) $("#planning-recurrence").value = "no";
+  toggleRecurrenceCountField();
   renderStructureOptions();
+}
+
+function duplicateDisplayedWeek() {
+  if (!isAdmin()) return alert("Seul l'admin peut dupliquer une semaine.");
+
+  const nbWeeks = Math.min(52, Math.max(1, parseInt($("#duplicate-weeks-count")?.value, 10) || 1));
+  const weekDates = getWeekDates().map(d => d.dateValue);
+  const sourceSlots = planningItems.filter(item => weekDates.includes(item.date));
+
+  if (!sourceSlots.length) {
+    return alert("Aucun créneau trouvé sur la semaine actuellement affichée.");
+  }
+
+  if (!confirm(`Copier les ${sourceSlots.length} créneau(x) de cette semaine sur les ${nbWeeks} semaine(s) suivante(s) ?`)) {
+    return;
+  }
+
+  const createdItems = [];
+
+  for (let w = 1; w <= nbWeeks; w++) {
+    for (const slot of sourceSlots) {
+      const shiftedDate = toDateInputValue(addDays(new Date(`${slot.date}T12:00:00`), w * 7));
+      const structure = findStructure(slot.structureId);
+      const copy = {
+        ...slot,
+        id: uid(),
+        date: shiftedDate,
+        day: dayFromDate(shiftedDate),
+        color: structure.color,
+        place: structure.name,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      planningItems.push(copy);
+      createdItems.push(copy);
+    }
+  }
+
+  saveLocal();
+  renderAll();
+  syncMultipleItems(createdItems.map(item => ({
+    type: "upsert-planning",
+    item,
+    notify: false
+  })));
+
+  alert(`✅ ${createdItems.length} créneau(x) copié(s) avec succès !`);
 }
 
 function deletePlanningItem(id) {
@@ -486,24 +583,59 @@ function deletePlanningItem(id) {
   const item = planningItems.find(p => p.id === id);
   if (!item) return;
 
+  // Si l'événement fait partie d'une série récurrente, proposer le choix style Google Calendar
+  if (item.recurrenceId) {
+    const followingCount = planningItems.filter(
+      p => p.recurrenceId === item.recurrenceId && p.date >= item.date
+    ).length;
+
+    if (followingCount > 1) {
+      openRecurrenceChoiceModal({
+        actionLabel: "Supprimer l'atelier périodique",
+        confirmLabel: "Supprimer",
+        confirmClass: "danger-btn",
+        onConfirm: (scope) => executePlanningDelete(item, scope)
+      });
+      return;
+    }
+  }
+
   const linkedFaq = faqItems.filter(f => f.slotId === id);
   const message = linkedFaq.length
     ? `Ce créneau contient ${linkedFaq.length} rendez-vous. Supprimer quand même ?`
     : "Supprimer ce créneau ?";
 
   if (!confirm(message)) return;
+  executePlanningDelete(item, "single");
+}
 
-  planningItems = planningItems.filter(p => p.id !== id);
-  faqItems = faqItems.filter(f => f.slotId !== id);
+function executePlanningDelete(item, scope) {
+  const targets = scope === "following" && item.recurrenceId
+    ? planningItems.filter(p => p.recurrenceId === item.recurrenceId && p.date >= item.date)
+    : [item];
+
+  const targetIds = new Set(targets.map(t => t.id));
+  planningItems = planningItems.filter(p => !targetIds.has(p.id));
+  faqItems = faqItems.filter(f => !targetIds.has(f.slotId));
+
   saveLocal();
   renderAll();
 
-  syncSharedDataDebounced({
-    type: "delete-planning",
-    id,
-    notify: window.APP_CONFIG?.enableMailNotification === true,
-    mail: buildPlanningMail("Créneau planning supprimé", item)
-  });
+  if (targets.length === 1) {
+    syncSharedDataDebounced({
+      type: "delete-planning",
+      id: item.id,
+      notify: window.APP_CONFIG?.enableMailNotification === true,
+      mail: buildPlanningMail("Créneau planning supprimé", item)
+    });
+  } else {
+    syncMultipleItems(targets.map((t, idx) => ({
+      type: "delete-planning",
+      id: t.id,
+      notify: idx === 0 && window.APP_CONFIG?.enableMailNotification === true,
+      mail: buildPlanningMail(`Série supprimée (${targets.length} créneaux)`, t)
+    })));
+  }
 }
 
 function addFaqItem(event) {
@@ -681,6 +813,37 @@ function addStructure(event) {
   $("#structure-color").value = "#2563eb";
 }
 
+function updateStructureColor(id, newColor) {
+  if (!isAdmin()) return;
+  const structure = structures.find(s => s.id === id);
+  if (!structure || structure.color === newColor) return;
+
+  structure.color = newColor;
+
+  // Met à jour la couleur stockée sur les créneaux existants de cette structure
+  const impactedSlots = [];
+  planningItems.forEach(item => {
+    if (item.structureId === id) {
+      item.color = newColor;
+      item.updatedAt = new Date().toISOString();
+      impactedSlots.push(item);
+    }
+  });
+
+  saveLocal();
+  renderAll();
+
+  // Synchronise la structure + les créneaux impactés
+  syncMultipleItems([
+    { type: "upsert-structure", item: structure },
+    ...impactedSlots.map(slot => ({
+      type: "upsert-planning",
+      item: slot,
+      notify: false
+    }))
+  ]);
+}
+
 function deleteStructure(id) {
   if (!isAdmin()) return;
   const used = planningItems.some(p => p.structureId === id) || faqItems.some(f => f.structureId === id);
@@ -707,7 +870,10 @@ function renderStructureOptions() {
   const optionHtml = structures.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join("");
   ["#planning-place", "#faq-place"].forEach(selector => {
     const el = $(selector);
-    if (el) el.innerHTML = optionHtml;
+    if (!el) return;
+    const prev = el.value;
+    el.innerHTML = optionHtml;
+    if (structures.some(s => s.id === prev)) el.value = prev;
   });
 }
 
@@ -800,7 +966,8 @@ function eventCardHtml(item) {
   const top = Math.max(0, (visibleStart - DAY_START_MINUTES) * MINUTE_HEIGHT);
   const height = Math.max(42, (visibleEnd - visibleStart) * MINUTE_HEIGHT);
 
-  const color = item.color || structure.color;
+  // Priorité à la couleur à jour de la structure pour répercussion immédiate
+  const color = structure.color || item.color;
 
   return `
     <button
@@ -815,7 +982,7 @@ function eventCardHtml(item) {
       data-action="detail-planning"
       data-id="${escapeHtml(item.id)}"
     >
-      <strong>${escapeHtml(item.title)}</strong>
+      <strong>${escapeHtml(item.title)} ${item.recurrenceId ? "🔁" : ""}</strong>
       <span class="activity-meta">${escapeHtml(item.start)} - ${escapeHtml(item.end)}</span>
       <span class="activity-meta">${escapeHtml(structure.name)}</span>
       ${item.type === "faq" ? `<span class="slot-badge">FAQ Numérique</span>` : ""}
@@ -871,7 +1038,7 @@ function renderFaqSlots() {
   container.innerHTML = slots.slice(0, 5).map(slot => {
     const structure = findStructure(slot.structureId);
     return `
-      <article class="slot-card" style="border-left-color:${escapeHtml(slot.color || structure.color)}">
+      <article class="slot-card" style="border-left-color:${escapeHtml(structure.color || slot.color)}">
         <p><strong>${escapeHtml(formatSlotLabel(slot))}</strong></p>
         <p>${escapeHtml(slot.title)}</p>
       </article>
@@ -928,7 +1095,16 @@ function renderStructures() {
 
   list.innerHTML = structures.map(structure => `
     <article class="structure-card" style="--card-color:${escapeHtml(structure.color)}">
-      <span class="color-dot"></span>
+      <label class="color-dot" title="Cliquer pour changer la couleur de la structure">
+        ${isAdmin() ? `
+          <input
+            type="color"
+            value="${escapeHtml(structure.color)}"
+            data-action="change-structure-color"
+            data-id="${escapeHtml(structure.id)}"
+          />
+        ` : ""}
+      </label>
 
       <div>
         <strong>${escapeHtml(structure.name)}</strong>
@@ -948,6 +1124,19 @@ function renderStructures() {
     </article>
   `).join("");
 
+  // Prévisualisation en direct de la pastille pendant le choix de couleur
+  list.querySelectorAll("[data-action='change-structure-color']").forEach(input => {
+    input.addEventListener("input", (e) => {
+      const card = e.target.closest(".structure-card");
+      if (card) card.style.setProperty("--card-color", e.target.value);
+    });
+
+    // Sauvegarde et mise à jour directe du Planning dès validation de la couleur
+    input.addEventListener("change", (e) => {
+      updateStructureColor(e.target.dataset.id, e.target.value);
+    });
+  });
+
   list.querySelectorAll("[data-action='delete-structure']").forEach(btn => {
     btn.addEventListener("click", () => deleteStructure(btn.dataset.id));
   });
@@ -966,6 +1155,7 @@ function showPlanningDetails(id) {
     <p><strong>Horaire :</strong> ${escapeHtml(item.start)} - ${escapeHtml(item.end)}</p>
     <p><strong>Structure :</strong> ${escapeHtml(structure.name)}</p>
     <p><strong>Type :</strong> ${item.type === "faq" ? "FAQ Numérique" : "Autre activité"}</p>
+    ${item.recurrenceId ? `<p><strong>Récurrence :</strong> 🔁 Atelier hebdomadaire récurrent</p>` : ""}
     <p><strong>Ajouté par :</strong> ${escapeHtml(item.ownerName || item.ownerId || "")}</p>
   `;
 
@@ -1090,30 +1280,118 @@ function savePlanningEdit(id) {
     return;
   }
 
-  const structure = findStructure(newStructureId);
+  const updatedValues = {
+    date: newDate,
+    start: newStart,
+    end: newEnd,
+    type: newType,
+    title: newType === "faq" ? "FAQ Numérique" : newTitle,
+    structureId: newStructureId
+  };
 
-  item.date = newDate;
-  item.day = dayFromDate(newDate);
-  item.start = newStart;
-  item.end = newEnd;
-  item.type = newType;
-  item.title = newType === "faq" ? "FAQ Numérique" : newTitle;
-  item.structureId = newStructureId;
-  item.place = structure.name;
-  item.color = structure.color;
-  item.updatedAt = new Date().toISOString();
+  // Si l'événement est récurrent et a d'autres occurrences suivantes, demander façon Google Calendar
+  if (item.recurrenceId) {
+    const followingCount = planningItems.filter(
+      p => p.recurrenceId === item.recurrenceId && p.date >= item.date
+    ).length;
 
-  currentWeekStart = getMonday(new Date(`${newDate}T12:00:00`));
+    if (followingCount > 1) {
+      openRecurrenceChoiceModal({
+        actionLabel: "Modifier l'atelier périodique",
+        confirmLabel: "Enregistrer",
+        confirmClass: "primary-btn",
+        onConfirm: (scope) => applyPlanningEdit(item, updatedValues, scope)
+      });
+      return;
+    }
+  }
+
+  applyPlanningEdit(item, updatedValues, "single");
+}
+
+function applyPlanningEdit(item, updatedValues, scope) {
+  const structure = findStructure(updatedValues.structureId);
+  const oldDateObj = new Date(`${item.date}T12:00:00`);
+  const newDateObj = new Date(`${updatedValues.date}T12:00:00`);
+  const deltaDays = Math.round((newDateObj - oldDateObj) / 86400000);
+
+  const targets = scope === "following" && item.recurrenceId
+    ? planningItems.filter(p => p.recurrenceId === item.recurrenceId && p.date >= item.date)
+    : [item];
+
+  targets.forEach(target => {
+    const shiftedDateStr = target.id === item.id
+      ? updatedValues.date
+      : toDateInputValue(addDays(new Date(`${target.date}T12:00:00`), deltaDays));
+
+    target.date = shiftedDateStr;
+    target.day = dayFromDate(shiftedDateStr);
+    target.start = updatedValues.start;
+    target.end = updatedValues.end;
+    target.type = updatedValues.type;
+    target.title = updatedValues.title;
+    target.structureId = updatedValues.structureId;
+    target.place = structure.name;
+    target.color = structure.color;
+    target.updatedAt = new Date().toISOString();
+
+    // Si on ne modifie que cet événement d'une série, on le détache de la série
+    if (scope === "single" && target.recurrenceId) {
+      target.recurrenceId = "";
+    }
+  });
+
+  currentWeekStart = getMonday(newDateObj);
 
   saveLocal();
   renderAll();
   closeDetailModal();
 
-  syncSharedDataDebounced({
-    type: "upsert-planning",
-    item,
-    notify: window.APP_CONFIG?.enableMailNotification === true,
-    mail: buildPlanningMail("Créneau planning modifié", item)
+  if (targets.length === 1) {
+    syncSharedDataDebounced({
+      type: "upsert-planning",
+      item,
+      notify: window.APP_CONFIG?.enableMailNotification === true,
+      mail: buildPlanningMail("Créneau planning modifié", item)
+    });
+  } else {
+    syncMultipleItems(targets.map((t, idx) => ({
+      type: "upsert-planning",
+      item: t,
+      notify: idx === 0 && window.APP_CONFIG?.enableMailNotification === true,
+      mail: buildPlanningMail(`Série modifiée (${targets.length} créneaux)`, t)
+    })));
+  }
+}
+
+function openRecurrenceChoiceModal({ actionLabel, confirmLabel, confirmClass, onConfirm }) {
+  $("#detail-modal-title").textContent = actionLabel;
+  $("#detail-modal-content").innerHTML = `
+    <p class="muted">Cet atelier fait partie d'une série récurrente. Appliquer ce changement à :</p>
+    <div class="recurrence-scope-list">
+      <label class="recurrence-scope-option">
+        <input type="radio" name="recurrence-scope" value="single" checked />
+        <span><strong>Uniquement cet événement</strong></span>
+      </label>
+      <label class="recurrence-scope-option">
+        <input type="radio" name="recurrence-scope" value="following" />
+        <span><strong>Cet événement et tous les suivants</strong></span>
+      </label>
+    </div>
+  `;
+
+  $("#detail-modal-actions").innerHTML = `
+    <button type="button" class="ghost-btn" id="modal-rec-cancel">Annuler</button>
+    <button type="button" class="${confirmClass}" id="modal-rec-confirm">${escapeHtml(confirmLabel)}</button>
+  `;
+
+  $("#detail-modal").hidden = false;
+
+  $("#modal-rec-cancel").addEventListener("click", closeDetailModal);
+  $("#modal-rec-confirm").addEventListener("click", () => {
+    const selected = document.querySelector('input[name="recurrence-scope"]:checked')?.value || "single";
+    closeDetailModal();
+    onConfirm(selected);
   });
 }
 
