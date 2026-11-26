@@ -572,7 +572,8 @@ function duplicateDisplayedWeek() {
   syncMultipleItems(createdItems.map(item => ({
     type: "upsert-planning",
     item,
-    notify: false
+    notify: window.APP_CONFIG?.enableMailNotification === true,
+    mail: buildPlanningMail("Créneau planning ajouté", item)
   })));
 
   alert(`✅ ${createdItems.length} créneau(x) copié(s) avec succès !`);
