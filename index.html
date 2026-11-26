@@ -171,12 +171,27 @@
         <button id="next-week" type="button" class="ghost-btn">Semaine suivante →</button>
       </div>
 
-      <!-- Duplication rapide de la semaine affichée -->
+      <!-- Duplication avancée de la semaine affichée -->
       <div class="week-duplicate-bar admin-only">
-        <span>📋 <strong>Dupliquer la semaine affichée</strong> sur les</span>
-        <input id="duplicate-weeks-count" type="number" min="1" max="52" value="4" />
-        <span>prochaines semaines</span>
-        <button id="duplicate-week-btn" type="button" class="ghost-btn">Copier la semaine</button>
+        <span>📋 <strong>Dupliquer cette semaine</strong></span>
+
+        <label style="display:inline-flex; align-items:center; gap:6px; margin:0;">
+          À partir du :
+          <input id="duplicate-start-date" type="date" />
+        </label>
+
+        <label style="display:inline-flex; align-items:center; gap:6px; margin:0;">
+          Toutes les
+          <input id="duplicate-interval-weeks" type="number" min="1" max="12" value="1" />
+          semaine(s)
+        </label>
+
+        <label style="display:inline-flex; align-items:center; gap:6px; margin:0;">
+          Jusqu'au :
+          <input id="duplicate-end-date" type="date" />
+        </label>
+
+        <button id="duplicate-week-btn" type="button" class="ghost-btn">Copier le planning</button>
       </div>
 
       <form id="planning-form" class="activity-form admin-only">
