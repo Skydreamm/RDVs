@@ -30,6 +30,8 @@ let structures = load(STORAGE_KEYS.structures, DEFAULT_STRUCTURES);
 let currentWeekStart = getMonday(new Date());
 let syncTimer = null;
 let lastLoadAt = null;
+let isEditingStructureColor = false;
+let pauseSyncUntil = 0;
 
 function load(key, fallback) {
   try {
@@ -324,9 +326,13 @@ function init() {
   const refreshSeconds = Number(window.APP_CONFIG?.refreshSeconds || 2);
 
   setInterval(async () => {
+    // Ne pas écraser l'interface si l'utilisateur est en train de choisir une couleur
+    // ou juste après une sauvegarde (le temps que Google Sheets enregistre)
+    if (isEditingStructureColor || Date.now() < pauseSyncUntil) return;
+
     const loaded = await loadSharedData();
 
-    if (loaded && currentUser) {
+    if (loaded && currentUser && !isEditingStructureColor && Date.now() >= pauseSyncUntil) {
       renderAll();
     }
   }, Math.max(refreshSeconds, 1) * 1000);
@@ -865,6 +871,7 @@ function addStructure(event) {
 }
 
 function updateStructureColor(id, newColor) {
+  pauseSyncUntil = Date.now() + 5000;
   if (!isAdmin()) return;
   const structure = structures.find(s => s.id === id);
   if (!structure || structure.color === newColor) return;
@@ -1177,14 +1184,33 @@ function renderStructures() {
 
   // Prévisualisation en direct de la pastille pendant le choix de couleur
   list.querySelectorAll("[data-action='change-structure-color']").forEach(input => {
+    // Met en pause l'actualisation dès l'ouverture du sélecteur de couleur
+    input.addEventListener("focus", () => {
+      isEditingStructureColor = true;
+    });
+    input.addEventListener("click", () => {
+      isEditingStructureColor = true;
+    });
+
+    // Prévisualisation en direct sans déclencher d'envoi
     input.addEventListener("input", (e) => {
+      isEditingStructureColor = true;
       const card = e.target.closest(".structure-card");
       if (card) card.style.setProperty("--card-color", e.target.value);
     });
 
-    // Sauvegarde et mise à jour directe du Planning dès validation de la couleur
+    // Validation définitive quand tu fermes/valides la palette
     input.addEventListener("change", (e) => {
+      isEditingStructureColor = false;
+      pauseSyncUntil = Date.now() + 5000; // Laisse 5s à Google Sheets pour enregistrer
       updateStructureColor(e.target.dataset.id, e.target.value);
+    });
+
+    // Si tu fermes la palette sans changer de couleur (Échap ou clic à côté)
+    input.addEventListener("blur", () => {
+      setTimeout(() => {
+        isEditingStructureColor = false;
+      }, 300);
     });
   });
 
