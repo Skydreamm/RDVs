@@ -429,6 +429,16 @@ function updateWeekLabel() {
     <span class="week-num-pill">Semaine n° ${weekNum}</span>
     Semaine du ${formatDateLongFr(currentWeekStart)} au ${formatDateLongFr(addDays(currentWeekStart, 6))}
   `;
+
+  // Pré-remplit par défaut le lundi de la semaine suivante et 4 semaines plus tard
+  const nextMonday = addDays(currentWeekStart, 7);
+  const defaultEnd = addDays(nextMonday, 27);
+  if ($("#duplicate-start-date") && !$("#duplicate-start-date").value) {
+    $("#duplicate-start-date").value = toDateInputValue(nextMonday);
+  }
+  if ($("#duplicate-end-date") && !$("#duplicate-end-date").value) {
+    $("#duplicate-end-date").value = toDateInputValue(defaultEnd);
+  }
 }
 
 function syncPlanningTitleWithType() {
@@ -534,7 +544,6 @@ function addPlanningItem(event) {
 function duplicateDisplayedWeek() {
   if (!isAdmin()) return alert("Seul l'admin peut dupliquer une semaine.");
 
-  const nbWeeks = Math.min(52, Math.max(1, parseInt($("#duplicate-weeks-count")?.value, 10) || 1));
   const weekDates = getWeekDates().map(d => d.dateValue);
   const sourceSlots = planningItems.filter(item => weekDates.includes(item.date));
 
@@ -542,33 +551,74 @@ function duplicateDisplayedWeek() {
     return alert("Aucun créneau trouvé sur la semaine actuellement affichée.");
   }
 
-  if (!confirm(`Copier les ${sourceSlots.length} créneau(x) de cette semaine sur les ${nbWeeks} semaine(s) suivante(s) ?`)) {
-    return;
+  const startDateStr = $("#duplicate-start-date")?.value;
+  const endDateStr = $("#duplicate-end-date")?.value;
+  const intervalWeeks = Math.min(12, Math.max(1, parseInt($("#duplicate-interval-weeks")?.value, 10) || 1));
+
+  if (!startDateStr || !endDateStr) {
+    return alert("Choisis une date de début et une date de fin pour la duplication.");
+  }
+
+  // On aligne la date de début sur le lundi de la semaine choisie pour garder chaque créneau sur son bon jour (Lundi -> Lundi, Mardi -> Mardi, etc.)
+  const targetFirstMonday = getMonday(new Date(`${startDateStr}T12:00:00`));
+  const limitDate = new Date(`${endDateStr}T23:59:59`);
+
+  if (limitDate < targetFirstMonday) {
+    return alert("La date de fin doit être après la date de début.");
   }
 
   const createdItems = [];
+  let currentTargetMonday = new Date(targetFirstMonday);
+  let targetWeeksCount = 0;
 
-  for (let w = 1; w <= nbWeeks; w++) {
+  while (currentTargetMonday <= limitDate) {
+    const daysOffset = Math.round((currentTargetMonday - currentWeekStart) / 86400000);
+    let weekHasAtLeastOneSlot = false;
+
     for (const slot of sourceSlots) {
-      const shiftedDate = toDateInputValue(addDays(new Date(`${slot.date}T12:00:00`), w * 7));
+      const shiftedDateObj = addDays(new Date(`${slot.date}T12:00:00`), daysOffset);
+
+      // Ne copie pas si le jour dépasse la date de fin choisie
+      if (shiftedDateObj > limitDate) continue;
+
+      const shiftedDateStr = toDateInputValue(shiftedDateObj);
       const structure = findStructure(slot.structureId);
+
       const copy = {
         ...slot,
         id: uid(),
-        date: shiftedDate,
-        day: dayFromDate(shiftedDate),
+        date: shiftedDateStr,
+        day: dayFromDate(shiftedDateStr),
         color: structure.color,
         place: structure.name,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
-      planningItems.push(copy);
+
       createdItems.push(copy);
+      weekHasAtLeastOneSlot = true;
     }
+
+    if (weekHasAtLeastOneSlot) targetWeeksCount++;
+    currentTargetMonday = addDays(currentTargetMonday, intervalWeeks * 7);
   }
 
+  if (!createdItems.length) {
+    return alert("Aucun créneau ne tombe dans la plage de dates sélectionnée.");
+  }
+
+  if (!confirm(
+    `Copier les ${sourceSlots.length} créneau(x) sur ${targetWeeksCount} semaine(s) ` +
+    `(toutes les ${intervalWeeks} semaine(s) du ${startDateStr} au ${endDateStr}), soit ${createdItems.length} créneau(x) au total ?`
+  )) {
+    return;
+  }
+
+  planningItems.push(...createdItems);
   saveLocal();
   renderAll();
+
+  // Synchronisation + envoi vers Outlook pour chaque créneau copié
   syncMultipleItems(createdItems.map(item => ({
     type: "upsert-planning",
     item,
@@ -576,7 +626,7 @@ function duplicateDisplayedWeek() {
     mail: buildPlanningMail("Créneau planning ajouté", item)
   })));
 
-  alert(`✅ ${createdItems.length} créneau(x) copié(s) avec succès !`);
+  alert(`✅ ${createdItems.length} créneau(x) créé(s) et envoyé(s) vers Outlook !`);
 }
 
 function deletePlanningItem(id) {
