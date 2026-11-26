@@ -222,15 +222,16 @@
           <select id="planning-place" required></select>
         </label>
 
-        <label>Récurrence
+       <label>Récurrence
           <select id="planning-recurrence">
-            <option value="no">Non</option>
-            <option value="yes">Oui (toutes les semaines)</option>
+            <option value="0">Non</option>
+            <option value="1">Oui (toutes les semaines)</option>
+            <option value="2">Oui (toutes les 2 semaines)</option>
           </select>
         </label>
 
-        <label id="planning-recurrence-count-wrap" hidden>Nombre de semaines
-          <input id="planning-recurrence-count" type="number" min="2" max="52" value="8" />
+        <label id="planning-recurrence-end-wrap" hidden>Jusqu'au (date butoir)
+          <input id="planning-recurrence-end" type="date" />
         </label>
 
         <button type="submit" class="primary-btn">Ajouter au planning</button>
