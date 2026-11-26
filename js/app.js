@@ -293,7 +293,8 @@ function init() {
   $("#refresh-btn").addEventListener("click", refreshNow);
   $("#planning-form").addEventListener("submit", addPlanningItem);
   $("#planning-type").addEventListener("change", syncPlanningTitleWithType);
-  $("#planning-recurrence")?.addEventListener("change", toggleRecurrenceCountField);
+ $("#planning-recurrence")?.addEventListener("change", toggleRecurrenceEndField);
+  $("#planning-date")?.addEventListener("change", syncDefaultRecurrenceEndDate);
   $("#duplicate-week-btn")?.addEventListener("click", duplicateDisplayedWeek);
   $("#faq-form").addEventListener("submit", addFaqItem);
   $("#faq-slot").addEventListener("change", applySelectedSlotToFaqForm);
@@ -453,10 +454,23 @@ function syncPlanningTitleWithType() {
   }
 }
 
-function toggleRecurrenceCountField() {
-  const isRecurring = $("#planning-recurrence")?.value === "yes";
-  const wrap = $("#planning-recurrence-count-wrap");
-  if (wrap) wrap.hidden = !isRecurring;
+function toggleRecurrenceEndField() {
+  const interval = parseInt($("#planning-recurrence")?.value || "0", 10);
+  const wrap = $("#planning-recurrence-end-wrap");
+  if (wrap) wrap.hidden = interval === 0;
+  if (interval > 0) syncDefaultRecurrenceEndDate();
+}
+
+function syncDefaultRecurrenceEndDate() {
+  const startVal = $("#planning-date")?.value;
+  const endInput = $("#planning-recurrence-end");
+  if (!startVal || !endInput) return;
+
+  // Pré-remplit par défaut 1 mois plus tard si vide ou antérieur à la date de début
+  if (!endInput.value || endInput.value < startVal) {
+    endInput.value = toDateInputValue(addDays(new Date(`${startVal}T12:00:00`), 28));
+  }
+  endInput.min = startVal;
 }
 
 async function syncMultipleItems(payloads) {
@@ -478,22 +492,41 @@ function addPlanningItem(event) {
   const structureId = $("#planning-place").value;
   const structure = findStructure(structureId);
 
-  const isRecurring = $("#planning-recurrence")?.value === "yes";
-  const weeksCount = isRecurring
-    ? Math.min(52, Math.max(2, parseInt($("#planning-recurrence-count")?.value, 10) || 2))
-    : 1;
+  const intervalWeeks = parseInt($("#planning-recurrence")?.value || "0", 10);
+  const isRecurring = intervalWeeks > 0;
+  const recurrenceEndStr = $("#planning-recurrence-end")?.value || "";
 
   if (!dateValue) return alert("Choisis une date.");
   if (minutes(end) <= minutes(start)) return alert("L'heure de fin doit être après l'heure de début.");
 
-  const recurrenceId = isRecurring ? "rec_" + Date.now() + "_" + Math.random().toString(16).slice(2, 6) : "";
-  const createdItems = [];
+  if (isRecurring) {
+    if (!recurrenceEndStr) {
+      return alert("Choisis une date butoir pour la récurrence.");
+    }
+    if (recurrenceEndStr < dateValue) {
+      return alert("La date butoir doit être après la date de début.");
+    }
+  }
+
   const baseDate = new Date(`${dateValue}T12:00:00`);
+  const limitDate = isRecurring ? new Date(`${recurrenceEndStr}T23:59:59`) : baseDate;
 
-  for (let i = 0; i < weeksCount; i++) {
-    const targetDate = addDays(baseDate, i * 7);
-    const targetDateStr = toDateInputValue(targetDate);
+  // On génère un recurrenceId uniquement s'il y a au moins 2 occurrences
+  const previewDates = [];
+  let cursor = new Date(baseDate);
+  while (cursor <= limitDate) {
+    previewDates.push(toDateInputValue(cursor));
+    if (!isRecurring) break;
+    cursor = addDays(cursor, intervalWeeks * 7);
+  }
 
+  const recurrenceId = previewDates.length > 1
+    ? "rec_" + Date.now() + "_" + Math.random().toString(16).slice(2, 6)
+    : "";
+
+  const createdItems = [];
+
+  for (const targetDateStr of previewDates) {
     const newItem = {
       id: uid(),
       ownerId: currentUser.id,
@@ -528,11 +561,11 @@ function addPlanningItem(event) {
       mail: buildPlanningMail("Créneau planning ajouté", createdItems[0])
     });
   } else {
-    syncMultipleItems(createdItems.map((item, idx) => ({
+    syncMultipleItems(createdItems.map(item => ({
       type: "upsert-planning",
       item,
-      notify: idx === 0 && window.APP_CONFIG?.enableMailNotification === true,
-      mail: buildPlanningMail(`Série de ${createdItems.length} créneaux ajoutée`, item)
+      notify: window.APP_CONFIG?.enableMailNotification === true,
+      mail: buildPlanningMail("Créneau planning ajouté", item)
     })));
   }
 
@@ -542,8 +575,8 @@ function addPlanningItem(event) {
   $("#planning-end").value = "10:00";
   $("#planning-type").value = "faq";
   $("#planning-title").value = "FAQ Numérique";
-  if ($("#planning-recurrence")) $("#planning-recurrence").value = "no";
-  toggleRecurrenceCountField();
+  if ($("#planning-recurrence")) $("#planning-recurrence").value = "0";
+  toggleRecurrenceEndField();
   renderStructureOptions();
 }
 
