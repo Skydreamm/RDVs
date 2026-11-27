@@ -287,7 +287,7 @@ function init() {
 
   applySavedTheme();
   $("#theme-toggle").addEventListener("click", toggleTheme);
-
+  
   $("#login-form").addEventListener("submit", onLogin);
   $("#logout-btn").addEventListener("click", logout);
   $("#refresh-btn").addEventListener("click", refreshNow);
@@ -314,6 +314,13 @@ function init() {
 
   $$(".tab-btn").forEach(btn => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
 
+  $("#duplicate-select-all")?.addEventListener("click", () => {
+    $$("#duplicate-slots-list input[type='checkbox']").forEach(cb => cb.checked = true);
+  });
+  $("#duplicate-unselect-all")?.addEventListener("click", () => {
+    $$("#duplicate-slots-list input[type='checkbox']").forEach(cb => cb.checked = false);
+  });
+  
   const today = new Date();
   $("#faq-date").value = toDateInputValue(today);
   $("#planning-date").value = toDateInputValue(today);
@@ -580,14 +587,53 @@ function addPlanningItem(event) {
   renderStructureOptions();
 }
 
+function renderDuplicateSlotsPicker() {
+  const container = $("#duplicate-slots-list");
+  if (!container) return;
+
+  const weekDates = getWeekDates().map(d => d.dateValue);
+  const weekSlots = planningItems
+    .filter(item => weekDates.includes(item.date))
+    .sort((a, b) => `${a.date} ${a.start}`.localeCompare(`${b.date} ${b.start}`));
+
+  if (!weekSlots.length) {
+    container.innerHTML = `<span class="muted" style="font-size:0.83rem;">Aucun créneau sur cette semaine.</span>`;
+    return;
+  }
+
+  // Conserve l'état coché/décoché si l'utilisateur avait déjà décoché un créneau
+  const previousUnchecked = new Set(
+    [...container.querySelectorAll("input[type='checkbox']")]
+      .filter(cb => !cb.checked)
+      .map(cb => cb.value)
+  );
+
+  container.innerHTML = weekSlots.map(slot => {
+    const structure = findStructure(slot.structureId);
+    const color = structure.color || slot.color || "#2563eb";
+    const dayName = dayFromDate(slot.date).slice(0, 3); // Lun, Mar, Mer...
+    const isChecked = !previousUnchecked.has(slot.id);
+
+    return `
+      <label class="duplicate-slot-chip" style="--chip-color:${escapeHtml(color)}">
+        <input type="checkbox" value="${escapeHtml(slot.id)}" ${isChecked ? "checked" : ""} />
+        <span><strong>${escapeHtml(dayName)}</strong> ${escapeHtml(slot.start)}–${escapeHtml(slot.end)} · ${escapeHtml(slot.title)} <em>(${escapeHtml(structure.name)})</em></span>
+      </label>
+    `;
+  }).join("");
+}
+
 function duplicateDisplayedWeek() {
   if (!isAdmin()) return alert("Seul l'admin peut dupliquer une semaine.");
 
-  const weekDates = getWeekDates().map(d => d.dateValue);
-  const sourceSlots = planningItems.filter(item => weekDates.includes(item.date));
+  const checkedIds = new Set(
+    $$("#duplicate-slots-list input[type='checkbox']:checked").map(cb => cb.value)
+  );
+
+  const sourceSlots = planningItems.filter(item => checkedIds.has(item.id));
 
   if (!sourceSlots.length) {
-    return alert("Aucun créneau trouvé sur la semaine actuellement affichée.");
+    return alert("Coche au moins un atelier à dupliquer.");
   }
 
   const startDateStr = $("#duplicate-start-date")?.value;
@@ -598,7 +644,6 @@ function duplicateDisplayedWeek() {
     return alert("Choisis une date de début et une date de fin pour la duplication.");
   }
 
-  // On aligne la date de début sur le lundi de la semaine choisie pour garder chaque créneau sur son bon jour (Lundi -> Lundi, Mardi -> Mardi, etc.)
   const targetFirstMonday = getMonday(new Date(`${startDateStr}T12:00:00`));
   const limitDate = new Date(`${endDateStr}T23:59:59`);
 
@@ -616,8 +661,6 @@ function duplicateDisplayedWeek() {
 
     for (const slot of sourceSlots) {
       const shiftedDateObj = addDays(new Date(`${slot.date}T12:00:00`), daysOffset);
-
-      // Ne copie pas si le jour dépasse la date de fin choisie
       if (shiftedDateObj > limitDate) continue;
 
       const shiftedDateStr = toDateInputValue(shiftedDateObj);
@@ -647,7 +690,7 @@ function duplicateDisplayedWeek() {
   }
 
   if (!confirm(
-    `Copier les ${sourceSlots.length} créneau(x) sur ${targetWeeksCount} semaine(s) ` +
+    `Copier les ${sourceSlots.length} atelier(s) coché(s) sur ${targetWeeksCount} semaine(s) ` +
     `(toutes les ${intervalWeeks} semaine(s) du ${startDateStr} au ${endDateStr}), soit ${createdItems.length} créneau(x) au total ?`
   )) {
     return;
@@ -657,7 +700,6 @@ function duplicateDisplayedWeek() {
   saveLocal();
   renderAll();
 
-  // Synchronisation + envoi vers Outlook pour chaque créneau copié
   syncMultipleItems(createdItems.map(item => ({
     type: "upsert-planning",
     item,
@@ -1011,6 +1053,8 @@ function renderPlanning() {
     btn.addEventListener("click", () => showFaqDetails(btn.dataset.id));
   });
 }
+
+renderDuplicateSlotsPicker();
 
 function hourLinesHtml() {
   return HOURS.map(hour => `
