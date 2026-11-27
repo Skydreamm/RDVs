@@ -587,32 +587,43 @@ function addPlanningItem(event) {
   renderStructureOptions();
 }
 
+function normalizeDateStr(val) {
+  if (!val) return "";
+  // Gère "2026-01-12" comme "2026-01-12T00:00:00.000Z"
+  const str = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    return str.slice(0, 10);
+  }
+  return str;
+}
+
 function renderDuplicateSlotsPicker() {
   const container = $("#duplicate-slots-list");
   if (!container) return;
 
   const weekDates = getWeekDates().map(d => d.dateValue);
   const weekSlots = planningItems
-    .filter(item => weekDates.includes(item.date))
-    .sort((a, b) => `${a.date} ${a.start}`.localeCompare(`${b.date} ${b.start}`));
+    .filter(item => weekDates.includes(normalizeDateStr(item.date)))
+    .sort((a, b) => `${normalizeDateStr(a.date)} ${a.start}`.localeCompare(`${normalizeDateStr(b.date)} ${b.start}`));
 
   if (!weekSlots.length) {
     container.innerHTML = `<span class="muted" style="font-size:0.83rem;">Aucun créneau sur cette semaine.</span>`;
     return;
   }
 
-  // Conserve l'état coché/décoché si l'utilisateur avait déjà décoché un créneau
+  // Conserve l'état décoché si l'utilisateur avait décoché un créneau avant un refresh
   const previousUnchecked = new Set(
     [...container.querySelectorAll("input[type='checkbox']")]
       .filter(cb => !cb.checked)
-      .map(cb => cb.value)
+      .map(cb => String(cb.value))
   );
 
   container.innerHTML = weekSlots.map(slot => {
-    const structure = findStructure(slot.structureId);
+    const cleanDate = normalizeDateStr(slot.date);
+    const structure = findStructure(slot.structureId || slot.place);
     const color = structure.color || slot.color || "#2563eb";
-    const dayName = dayFromDate(slot.date).slice(0, 3); // Lun, Mar, Mer...
-    const isChecked = !previousUnchecked.has(slot.id);
+    const dayName = dayFromDate(cleanDate).slice(0, 3);
+    const isChecked = !previousUnchecked.has(String(slot.id));
 
     return `
       <label class="duplicate-slot-chip" style="--chip-color:${escapeHtml(color)}">
@@ -627,10 +638,10 @@ function duplicateDisplayedWeek() {
   if (!isAdmin()) return alert("Seul l'admin peut dupliquer une semaine.");
 
   const checkedIds = new Set(
-    $$("#duplicate-slots-list input[type='checkbox']:checked").map(cb => cb.value)
+    $$("#duplicate-slots-list input[type='checkbox']:checked").map(cb => String(cb.value))
   );
 
-  const sourceSlots = planningItems.filter(item => checkedIds.has(item.id));
+  const sourceSlots = planningItems.filter(item => checkedIds.has(String(item.id)));
 
   if (!sourceSlots.length) {
     return alert("Coche au moins un atelier à dupliquer.");
@@ -660,11 +671,12 @@ function duplicateDisplayedWeek() {
     let weekHasAtLeastOneSlot = false;
 
     for (const slot of sourceSlots) {
-      const shiftedDateObj = addDays(new Date(`${slot.date}T12:00:00`), daysOffset);
+      const cleanDate = normalizeDateStr(slot.date);
+      const shiftedDateObj = addDays(new Date(`${cleanDate}T12:00:00`), daysOffset);
       if (shiftedDateObj > limitDate) continue;
 
       const shiftedDateStr = toDateInputValue(shiftedDateObj);
-      const structure = findStructure(slot.structureId);
+      const structure = findStructure(slot.structureId || slot.place);
 
       const copy = {
         ...slot,
@@ -994,6 +1006,7 @@ function renderAll() {
   renderStructureOptions();
   updateWeekLabel();
   renderPlanning();
+  renderDuplicateSlotsPicker()
   renderFaqSlots();
   renderFaqList();
   renderStructures();
