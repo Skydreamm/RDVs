@@ -79,6 +79,33 @@
       width: auto;
       margin: 0;
     }
+    .duplicate-slots-picker {
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 6px;
+      padding-top: 8px;
+      border-top: 1px dashed rgba(100, 116, 139, 0.35);
+    }
+    .duplicate-slot-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      border-left: 4px solid var(--chip-color, #2563eb);
+      background: rgba(148, 163, 184, 0.08);
+      font-size: 0.83rem;
+      cursor: pointer;
+      user-select: none;
+    }
+    .duplicate-slot-chip input[type="checkbox"] {
+      width: auto;
+      margin: 0;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -171,7 +198,7 @@
         <button id="next-week" type="button" class="ghost-btn">Semaine suivante →</button>
       </div>
 
-      <!-- Duplication avancée de la semaine affichée -->
+     <!-- Duplication sélective de la semaine affichée -->
       <div class="week-duplicate-bar admin-only">
         <span>📋 <strong>Dupliquer cette semaine</strong></span>
 
@@ -191,7 +218,12 @@
           <input id="duplicate-end-date" type="date" />
         </label>
 
-        <button id="duplicate-week-btn" type="button" class="ghost-btn">Copier le planning</button>
+        <button id="duplicate-select-all" type="button" class="ghost-btn" style="padding:5px 9px; font-size:0.8rem;">Tout cocher</button>
+        <button id="duplicate-unselect-all" type="button" class="ghost-btn" style="padding:5px 9px; font-size:0.8rem;">Tout décocher</button>
+        <button id="duplicate-week-btn" type="button" class="primary-btn">Copier la sélection</button>
+
+        <!-- Liste des créneaux de la semaine avec cases à cocher -->
+        <div id="duplicate-slots-list" class="duplicate-slots-picker"></div>
       </div>
 
       <form id="planning-form" class="activity-form admin-only">
