@@ -277,9 +277,16 @@ function formatSlotLabel(slot) {
 }
 
 function faqSlots() {
+  const today = toDateInputValue(new Date());
+
   return planningItems
-    .filter(item => item.type === "faq")
-    .sort((a, b) => `${a.date || ""} ${a.start}`.localeCompare(`${b.date || ""} ${b.start}`));
+    .filter(item => {
+      if (item.type !== "faq") return false;
+      const slotDate = normalizeDateStr(item.date);
+      // Ne garde que les créneaux d'aujourd'hui ou à venir
+      return slotDate >= today;
+    })
+    .sort((a, b) => `${normalizeDateStr(a.date)} ${a.start}`.localeCompare(`${normalizeDateStr(b.date)} ${b.start}`));
 }
 
 function init() {
@@ -1176,8 +1183,8 @@ function renderFaqSlots() {
   const slots = faqSlots();
 
   if (!slots.length) {
-    select.innerHTML = `<option value="">Aucun créneau FAQ disponible</option>`;
-    container.innerHTML = `<div class="empty-state">Aucun créneau FAQ n'a encore été créé.</div>`;
+    select.innerHTML = `<option value="">Aucun créneau FAQ à venir disponible</option>`;
+    container.innerHTML = `<div class="empty-state">Aucun créneau FAQ à venir n'est programmé.</div>`;
     return;
   }
 
