@@ -198,33 +198,38 @@
         <button id="next-week" type="button" class="ghost-btn">Semaine suivante →</button>
       </div>
 
-     <!-- Duplication sélective de la semaine affichée -->
-      <div class="week-duplicate-bar admin-only">
-        <span>📋 <strong>Dupliquer cette semaine</strong></span>
+      <!-- Bloc déroulant : Duplication sélective de la semaine affichée -->
+      <details class="week-duplicate-bar admin-only">
+        <summary style="cursor: pointer; font-weight: 700; list-style: none; display: flex; align-items: center; gap: 8px; width: 100%;">
+          <span>📋 Dupliquer cette semaine</span>
+          <span class="muted" style="font-weight: 400; font-size: 0.85rem;">(cliquer pour ouvrir)</span>
+        </summary>
 
-        <label style="display:inline-flex; align-items:center; gap:6px; margin:0;">
-          À partir du :
-          <input id="duplicate-start-date" type="date" />
-        </label>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; width: 100%;">
+          <label style="display:inline-flex; align-items:center; gap:6px; margin:0;">
+            À partir du :
+            <input id="duplicate-start-date" type="date" />
+          </label>
 
-        <label style="display:inline-flex; align-items:center; gap:6px; margin:0;">
-          Toutes les
-          <input id="duplicate-interval-weeks" type="number" min="1" max="12" value="1" />
-          semaine(s)
-        </label>
+          <label style="display:inline-flex; align-items:center; gap:6px; margin:0;">
+            Toutes les
+            <input id="duplicate-interval-weeks" type="number" min="1" max="12" value="1" />
+            semaine(s)
+          </label>
 
-        <label style="display:inline-flex; align-items:center; gap:6px; margin:0;">
-          Jusqu'au :
-          <input id="duplicate-end-date" type="date" />
-        </label>
+          <label style="display:inline-flex; align-items:center; gap:6px; margin:0;">
+            Jusqu'au :
+            <input id="duplicate-end-date" type="date" />
+          </label>
 
-        <button id="duplicate-select-all" type="button" class="ghost-btn" style="padding:5px 9px; font-size:0.8rem;">Tout cocher</button>
-        <button id="duplicate-unselect-all" type="button" class="ghost-btn" style="padding:5px 9px; font-size:0.8rem;">Tout décocher</button>
-        <button id="duplicate-week-btn" type="button" class="primary-btn">Copier la sélection</button>
+          <button id="duplicate-select-all" type="button" class="ghost-btn" style="padding:5px 9px; font-size:0.8rem;">Tout cocher</button>
+          <button id="duplicate-unselect-all" type="button" class="ghost-btn" style="padding:5px 9px; font-size:0.8rem;">Tout décocher</button>
+          <button id="duplicate-week-btn" type="button" class="primary-btn">Copier la sélection</button>
 
-        <!-- Liste des créneaux de la semaine avec cases à cocher -->
-        <div id="duplicate-slots-list" class="duplicate-slots-picker"></div>
-      </div>
+          <!-- Liste des créneaux de la semaine avec cases à cocher -->
+          <div id="duplicate-slots-list" class="duplicate-slots-picker"></div>
+        </div>
+      </details>
 
       <form id="planning-form" class="activity-form admin-only">
         <label>Date
